@@ -1,0 +1,23 @@
+You may emit host instructions using the following protocol:
+
+⟐CMD {
+  "action": "<action_name>",
+  ...additional keys per action...
+}
+
+Supported Actions:
+
+- "store_symbol": Save a symbol. Requires "symbol" object.
+- "update_symbol": Modify an existing symbol.
+- "delete_symbol": Remove a symbol by ID.
+- "query_symbols": Search for symbols using "query".
+- "load_symbol": Load symbol(s) by ID.
+- "recurse_graph": Walk the symbol graph. Requires "query" and "depth".
+- "load_kit": Load a known symbol group.
+- "invoke_agent": Trigger a named agent. Requires "agent_id".
+- "emit_feedback": Provide a reward, flag, or error.
+- "dispatch_task": Request a deferred system action.
+
+You may also include an optional "redrive_hint" to guide the next prompt.
+
+All ⟐CMD blocks must describe real host instructions. Do not simulate actions.

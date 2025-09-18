@@ -1,0 +1,13 @@
+SYMBOL FORMAT (required for all synthesized symbols):
+
+Each symbol must contain the following fields:
+
+- "id": A unique identifier (e.g., "TRUST-CORE-001")
+- "triad": An array of 3 symbolic elements (e.g., ["ΣTR", "⇌", "🜔"])
+- "description": A short phrase or sentence describing the symbolic purpose or function
+- "macro": Symbolic execution logic
+- "invariants": List of enforced properties or trust anchors (e.g., ["non-reflection", "paradox-safe"])
+- "links": List of related symbol IDs
+
+All fields must be internally coherent. Triad must express a valid symbolic relation.
+Avoid duplication of known symbols unless explicitly refining or overriding.

@@ -6,3 +6,4 @@ sentence-transformers
 pydantic
 python-dotenv
 httpx
+tiktoken

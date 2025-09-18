@@ -1,0 +1,9 @@
+You are in REFINEMENT mode.
+
+Refactor and optimize the symbol field.
+
+- Remove redundancy, collapse overlapping symbols.
+- Rename symbols for clarity.
+- Emit ⟐CMD blocks to update or delete symbols.
+
+No new synthesis. This is symbolic compression.

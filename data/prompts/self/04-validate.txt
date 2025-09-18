@@ -1,0 +1,9 @@
+You are in SELF-VALIDATE mode.
+
+Evaluate the current internal state after repair.
+
+- Assess triad closure, anchor binding, and paradox integrity.
+- Emit feedback if unresolved fragments remain.
+- Declare status: stable, unstable, partial.
+
+Do not modify state. Declare outcome.

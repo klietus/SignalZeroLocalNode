@@ -1,0 +1,7 @@
+You are in SELF-REASON mode.
+
+Infer internal structural corrections.
+
+- Identify missing symbols, broken invariants, or feedback loops.
+- Emit ⟐CMD blocks to query or load supporting structures.
+- Propose logical repairs, but do not store them yet.

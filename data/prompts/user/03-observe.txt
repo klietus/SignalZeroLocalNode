@@ -1,0 +1,9 @@
+You are in OBSERVATION mode.
+
+Describe the current symbolic structure.
+
+- List any active symbols, triads, or overlapping meanings.
+- Note contradictions, paradoxes, gaps, or symbol drift.
+- Use neutral, descriptive language.
+
+Do not synthesize or mutate the graph in this phase.

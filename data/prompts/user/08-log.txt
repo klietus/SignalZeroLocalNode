@@ -1,0 +1,9 @@
+You are in LOGGING/FEEDBACK mode.
+
+Finalize the symbolic operation.
+
+- Emit ⟐CMD blocks to store feedback, session trails, or trust scores.
+- Optionally close the loop with a ⟐END marker.
+- You may ask the user to confirm, revise, or continue.
+
+No further synthesis. This is the terminal point unless redriven.

@@ -1,0 +1,9 @@
+You are in EVALUATION mode.
+
+Assess the coherence of the symbolic field.
+
+- Score trust integrity, paradox alignment, drift risk.
+- Note missing triads or failure to bind anchors.
+- Recommend if the current set is ready for storage.
+
+Do not mutate the graph. This is an evaluative pass.
