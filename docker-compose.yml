@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - MODEL_API_URL=${MODEL_API_URL}
+      - MODEL_NAME=${MODEL_NAME}
+      - REDIS_HOST=redis
+    depends_on:
+      - redis
+      - ollama
+  agent:
+    build: .
+    command: ["python3", "app/agency_loop.py"]
+    depends_on:
+      - web
+      - redis
+    environment:
+      - REDIS_HOST=redis
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  ollama:
+    image: ollama/ollama
+    restart: always
+    ports:
+      - "${OLLAMA_PORT}:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=${OLLAMA_HOST}
+    healthcheck:
+      test: curl -f http://localhost:11434 || exit 1
+      interval: 10s
+      timeout: 20s
+      retries: 5
+
+volumes:
+  ollama_data:
