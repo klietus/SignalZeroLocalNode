@@ -19,9 +19,6 @@ async def query_inference(query: str = Query(...), session_id: str = Query(...))
     # Placeholder model call
     reply_text = result["reply"]
 
-    # Append model response to history
-    chat_history.append_message(session_id, "assistant", reply_text)
-
     return {
         **result
     }

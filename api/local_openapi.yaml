@@ -5,7 +5,7 @@ info:
   description: |
     A minimal key/value API for persisting and retrieving SignalZero symbols by ID, domain, or tag.
 servers:
-  - url: https://127.0.0.1/
+  - url: https://0.0.0.0/
 paths:
   /query:
     get:

@@ -37,7 +37,9 @@ WORKFLOW_PHASES = [
     ("08-log", "user")
 ]
 
-def run_user_query(user_query: str, session_id: str, k: int = 5) -> Dict:
+def run_query(user_query: str, session_id: str, k: int = 5) -> Dict:
+    chat_history = ChatHistory()
+    
     nearest = embedding_index.search(user_query, k)
 
     context_symbols = []
