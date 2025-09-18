@@ -12,21 +12,25 @@ class ContextManager:
     def add_system_prompt(self, content):
         self.system_prompts.append(content)
 
-    def add_symbol(self, symbol, relevance=1.0):
-        symbol["relevance"] = relevance
+    def add_symbol(self, symbol, relevance = 1.0):
+        setattr(symbol, "relevance", relevance)
         self.symbols.append(symbol)
 
     def add_history(self, role, content):
         self.history.append((role, content))
 
     def pack_symbols(self, token_budget):
-        # Sort by relevance descending
-        sorted_syms = sorted(self.symbols, key=lambda x: -x["relevance"])
+        sorted_syms = sorted(self.symbols, key=lambda x: -getattr(x, "relevance", 0.0))
+
         packed = []
         tokens_used = 0
 
         for s in sorted_syms:
-            line = f'{s["id"]} | {" ".join(s["triad"])} | {s["description"]}'
+            triad = s.triad or []
+            desc = s.description or ""
+            macro = s.macro or ""
+
+            line = f'{s.id} | {s.name} |{" ".join(triad)} | {macro}'
             t = len(self.encoder.encode(line))
             if tokens_used + t > token_budget:
                 break
@@ -60,7 +64,9 @@ class ContextManager:
         sym = self.pack_symbols(symbol_tokens)
         hist = self.pack_history(history_tokens)
 
+        prompt_parts.append("SYMBOLS:")
         prompt_parts.append(sym)
+        prompt_parts.append("CHAT_HISTORY:")
         prompt_parts.append(hist)
         prompt_parts.append(f"USER: {user_prompt}")
         return "\n\n".join(prompt_parts)

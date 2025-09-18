@@ -1,10 +1,10 @@
 
-from context_manager import ContextManager
+from app.context_manager import ContextManager
 from pathlib import Path
 from app import embedding_index, chat_history
 from app.symbol_store import get_symbol
-from app.prompt_generator import build_prompt
 from app.model_call import model_call
+from app.chat_history import ChatHistory
 
 
 def load_prompt_phase(phase_id: str, workflow: str = "user") -> str:
@@ -14,16 +14,6 @@ def load_prompt_phase(phase_id: str, workflow: str = "user") -> str:
         raise FileNotFoundError(f"Prompt phase not found: {path}")
     return path.read_text().strip()
     return phase_path.read_text().strip()
-
-
-def run_symbolic_workflow(user_input, phase_id="01-plan", workflow="user"):
-    ctx = ContextManager()
-    ctx.add_history("system", load_prompt_phase("command_syntax", workflow="shared"))
-    ctx.add_history("system", load_prompt_phase("symbol_format", workflow="shared"))
-    ctx.add_history("system", load_prompt_phase(phase_id, workflow))
-    return ctx.build_prompt(user_input)
-    ctx.add_history("system", load_prompt_phase(phase_id))
-    return ctx.build_prompt(user_input)
 
 WORKFLOW_PHASES = [
     ("00-init", "user"),
@@ -37,9 +27,9 @@ WORKFLOW_PHASES = [
     ("08-log", "user")
 ]
 
-def run_query(user_query: str, session_id: str, k: int = 5) -> Dict:
+def run_query(user_query: str, session_id: str, k: int = 5) -> dict:
     chat_history = ChatHistory()
-    
+
     nearest = embedding_index.search(user_query, k)
 
     context_symbols = []
@@ -56,10 +46,10 @@ def run_query(user_query: str, session_id: str, k: int = 5) -> Dict:
 
     for phase_id, workflow in WORKFLOW_PHASES:
         ctx = ContextManager()
-        ctx.add_system_prompt("system", load_prompt_phase("system_prompt", "shared"))
-        ctx.add_system_prompt("system", load_prompt_phase("command_syntax", "shared"))
-        ctx.add_system_prompt("system", load_prompt_phase("symbol_format", "shared"))
-        ctx.add_system_prompt("system", load_prompt_phase(phase_id, workflow))
+        ctx.add_system_prompt(load_prompt_phase("system_prompt", "shared"))
+        ctx.add_system_prompt(load_prompt_phase("command_syntax", "shared"))
+        ctx.add_system_prompt(load_prompt_phase("symbol_format", "shared"))
+        ctx.add_system_prompt(load_prompt_phase(phase_id, workflow))
 
         # Inject recent messages and symbols
         for role, content in chat_turns + accumulated_history:

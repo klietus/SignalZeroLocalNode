@@ -1,11 +1,15 @@
 # app/symbol_store.py
 
 from typing import List, Dict, Optional
+from app.types import Symbol, Facets
 from pydantic import BaseModel
 from app import embedding_index
 import redis
 import json
 import os
+import json
+from pathlib import Path
+from app.types import Symbol
 
 # --------- Redis Setup ---------
 
@@ -15,36 +19,28 @@ REDIS_DB = int(os.getenv("REDIS_DB", 0))
 
 r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True)
 
-# --------- Symbol Schema ---------
-
-class Facets(BaseModel):
-    function: str
-    topology: str
-    commit: str
-    gate: List[str]
-    substrate: List[str]
-    temporal: str
-    invariants: List[str]
-
-class Symbol(BaseModel):
-    id: str
-    name: Optional[str]
-    macro: str
-    gate: Optional[List[str]]
-    facets: Facets
-    failure_mode: Optional[str]
-    linked_patterns: Optional[List[str]]
-    symbolic_role: Optional[str]
-    triad: str
-    invocations: Optional[List[str]]
-    symbol_domain: Optional[str]
-    symbol_tag: Optional[str]
-    version: Optional[int]
-    origin: Optional[str]
-    scope: Optional[List[str]]
-
-
 # --------- Redis Symbol Logic ---------
+
+symbol_index: dict[str, Symbol] = {}
+
+def load_symbol_store_if_empty(path="data/symbol_catalog.json"):
+
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    if "symbols" not in data or not isinstance(data["symbols"], list):
+        raise ValueError("Invalid symbol catalog format: missing 'symbols' key or malformed array.")
+
+    count = 0
+    for s in data["symbols"]:
+        try:
+            symbol = Symbol(**s)
+            r.set(f"symbol:{symbol.id}", symbol.json())
+            count += 1
+        except Exception as e:
+            print(f"[SymbolStore] Failed to load symbol: {s.get('id', '[unknown]')} — {e}")
+
+    print(f"[SymbolStore] Loaded {count} symbols into Redis and embedding index.")
 
 def _key(symbol_id: str) -> str:
     return f"symbol:{symbol_id}"

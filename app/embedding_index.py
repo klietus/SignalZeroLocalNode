@@ -1,20 +1,18 @@
-# app/embedding_index.py
-
 import faiss
 import numpy as np
 from typing import List, Tuple
 from sentence_transformers import SentenceTransformer
-from app.symbol_store import Symbol, get_symbols
+from app.types import Symbol
 
 model = SentenceTransformer("all-MiniLM-L6-v2")
 dimension = 384
 index = faiss.IndexFlatL2(dimension)
-symbol_index_map: Dict[str, int] = {}
+symbol_index_map: dict[str, int] = {}
 index_data: List[np.ndarray] = []
-
 
 def build_index():
     global index, symbol_index_map, index_data
+    from app.symbol_store import get_symbols
     symbols = get_symbols(domain=None, tag=None, start=0, limit=10000)
     symbol_index_map.clear()
     index_data.clear()

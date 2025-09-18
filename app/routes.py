@@ -1,27 +1,23 @@
 # app/routes.py
 
 from fastapi import APIRouter, HTTPException, Query, Path, Body
+from pydantic import BaseModel
 from typing import List, Optional
 from app import symbol_store
 from app.symbol_store import Symbol
-from app.inference import query_symbol_similarity, build_index
 from app.inference import run_query
 
 router = APIRouter()
 
+class QueryRequest(BaseModel):
+    query: str
+    session_id: str
 
+@router.post("/query")
+async def query_inference(request: QueryRequest):
+    result = run_query(request.query, request.session_id)
+    return result
 
-@router.get("/query")
-async def query_inference(query: str = Query(...), session_id: str = Query(...)):
-    result = run_query(query, session_id)
-    prompt = result["prompt"]
-
-    # Placeholder model call
-    reply_text = result["reply"]
-
-    return {
-        **result
-    }
 
 @router.get("/symbols")
 async def get_symbols(
