@@ -1,2 +1,37 @@
+# Environment configuration
+.env
+.env.local
+.env.*
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Packaging/build directories
+build/
+dist/
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+
+# Testing and coverage data
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.cache/
+
+# Logs and runtime data
+chat_sessions/
 dump.rdb
-chat_sessions
+*.log
+
+# Database snapshots
+*.sqlite
+*.sqlite3
+*.db
