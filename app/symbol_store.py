@@ -35,7 +35,7 @@ def load_symbol_store_if_empty(path="data/symbol_catalog.json"):
     for s in data["symbols"]:
         try:
             symbol = Symbol(**s)
-            r.set(f"symbol:{symbol.id}", symbol.json())
+            r.set(f"symbol:{symbol.id}", symbol.model_dump_json())
             count += 1
         except Exception as e:
             print(f"[SymbolStore] Failed to load symbol: {s.get('id', '[unknown]')} — {e}")
@@ -48,11 +48,11 @@ def _key(symbol_id: str) -> str:
 
 def get_symbol(symbol_id: str) -> Optional[Symbol]:
     raw = r.get(_key(symbol_id))
-    return Symbol.parse_raw(raw) if raw else None
+    return Symbol.model_validate_json(raw) if raw else None
 
 
 def put_symbol(symbol_id: str, symbol: Symbol) -> str:
-    r.set(_key(symbol_id), symbol.json())
+    r.set(_key(symbol_id), symbol.model_dump_json())
     embedding_index.add_symbol(symbol) 
     if symbol.symbol_domain:
         r.sadd("domains", symbol.symbol_domain)
@@ -62,7 +62,7 @@ def put_symbol(symbol_id: str, symbol: Symbol) -> str:
 def put_symbols_bulk(symbols: List[Symbol]) -> str:
     pipe = r.pipeline()
     for s in symbols:
-        pipe.set(_key(s.id), s.json())
+        pipe.set(_key(s.id), s.model_dump_json())
         embedding_index.add_symbol(s)
         if s.symbol_domain:
             pipe.sadd("domains", s.symbol_domain)
@@ -78,7 +78,7 @@ def get_symbols(domain: Optional[str], tag: Optional[str], start: int, limit: in
     for raw in raw_values:
         if not raw:
             continue
-        symbol = Symbol.parse_raw(raw)
+        symbol = Symbol.model_validate_json(raw)
         if domain and symbol.symbol_domain != domain:
             continue
         if tag and symbol.symbol_tag != tag:

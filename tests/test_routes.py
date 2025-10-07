@@ -1,0 +1,87 @@
+import asyncio
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from app import routes
+
+
+import pytest
+
+
+@pytest.fixture
+def client():
+    app = FastAPI()
+    app.include_router(routes.router)
+    return TestClient(app)
+
+
+def test_query_endpoint(client, monkeypatch):
+    monkeypatch.setattr(routes, "run_query", lambda query, session_id: {"reply": "done", "session": session_id})
+
+    response = client.post("/query", json={"query": "hello", "session_id": "abc"})
+    assert response.status_code == 200
+    assert response.json()["reply"] == "done"
+
+
+def test_get_symbols(client, monkeypatch):
+    monkeypatch.setattr(routes.symbol_store, "get_symbols", lambda **kwargs: ["sym1", "sym2"])
+
+    response = client.get("/symbols")
+    assert response.status_code == 200
+    assert response.json() == ["sym1", "sym2"]
+
+
+def test_get_symbol_by_id(client, monkeypatch):
+    monkeypatch.setattr(routes.symbol_store, "get_symbol", lambda sid: {"id": sid})
+
+    response = client.get("/symbol/test")
+    assert response.status_code == 200
+    assert response.json() == {"id": "test"}
+
+
+def test_get_symbol_not_found(client, monkeypatch):
+    monkeypatch.setattr(routes.symbol_store, "get_symbol", lambda sid: None)
+
+    response = client.get("/symbol/missing")
+    assert response.status_code == 404
+
+
+def test_put_symbol(client, monkeypatch):
+    recorded = {}
+
+    def fake_put(symbol_id, symbol):
+        recorded["payload"] = (symbol_id, symbol)
+        return "stored"
+
+    monkeypatch.setattr(routes.symbol_store, "put_symbol", fake_put)
+
+    payload = {"id": "sym", "name": "Symbol"}
+    response = client.put("/inject/sym", json=payload)
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "stored"}
+    assert recorded["payload"][0] == "sym"
+
+
+def test_bulk_put_symbols(monkeypatch):
+    calls = {}
+
+    def fake_bulk(symbols):
+        calls["symbols"] = symbols
+        return "bulk"
+
+    monkeypatch.setattr(routes.symbol_store, "put_symbols_bulk", fake_bulk)
+
+    payload = [routes.Symbol(id="s1"), routes.Symbol(id="s2")]
+    result = asyncio.run(routes.bulk_put_symbols(payload))
+
+    assert result == {"status": "bulk"}
+    assert [s.id for s in calls["symbols"]] == ["s1", "s2"]
+
+
+def test_list_domains(client, monkeypatch):
+    monkeypatch.setattr(routes.symbol_store, "get_domains", lambda: ["a", "b"])
+
+    response = client.get("/domains")
+    assert response.status_code == 200
+    assert response.json() == ["a", "b"]
