@@ -104,5 +104,12 @@ def configure_logging() -> None:
     _CONFIGURED = True
 
 
-__all__ = ["configure_logging"]
+def get_logger(name: str) -> structlog.stdlib.BoundLogger:
+    """Return a configured structlog logger for the given module name."""
+
+    configure_logging()
+    return structlog.get_logger(name)
+
+
+__all__ = ["configure_logging", "get_logger"]
 
