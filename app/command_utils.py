@@ -4,8 +4,15 @@ from __future__ import annotations
 import json
 from typing import Dict, Iterable, List
 
+import structlog
+
+from app.logging_config import configure_logging
 from app.symbol_store import get_symbol
 from app.types import Symbol
+
+
+configure_logging()
+log = structlog.get_logger(__name__)
 
 
 def _collect_symbols_from_result(result: object) -> List[Symbol]:
@@ -55,6 +62,9 @@ def _add_symbols_to_context(
         symbol_lookup[symbol.id] = symbol
         added_ids.append(symbol.id)
 
+    if added_ids:
+        log.info("command_utils.symbols_added", count=len(added_ids))
+
     return added_ids
 
 
@@ -75,6 +85,7 @@ def _load_linked_symbols(
                 continue
             linked_symbol = get_symbol(linked_id)
             if linked_symbol is None:
+                log.debug("command_utils.linked_symbol_missing", symbol_id=linked_id)
                 continue
             context_symbols.append(linked_symbol)
             symbol_lookup[linked_symbol.id] = linked_symbol
@@ -100,18 +111,35 @@ def integrate_command_results(
             symbols = _collect_symbols_from_result(result)
             added = _add_symbols_to_context(symbols, context_symbols, symbol_lookup)
             if added:
-                history_notes.append(f"{action}: added symbols {added}")
+                note = f"{action}: added symbols {added}"
+                history_notes.append(note)
             else:
-                history_notes.append(f"{action}: no new symbols added")
+                note = f"{action}: no new symbols added"
+                history_notes.append(note)
+            log.info(
+                "command_utils.command_processed",
+                action=action,
+                added=len(added),
+            )
         elif action == "recurse_graph":
             added = _load_linked_symbols(context_symbols, symbol_lookup)
             if added:
-                history_notes.append(f"recurse_graph: loaded linked symbols {added}")
+                note = f"recurse_graph: loaded linked symbols {added}"
+                history_notes.append(note)
             else:
-                history_notes.append("recurse_graph: no linked symbols loaded")
+                note = "recurse_graph: no linked symbols loaded"
+                history_notes.append(note)
+            log.info("command_utils.recurse_graph", added=len(added))
         else:
-            history_notes.append(f"{action}: {_stringify(result)}")
+            note = f"{action}: {_stringify(result)}"
+            history_notes.append(note)
+            log.debug(
+                "command_utils.command_logged",
+                action=action,
+                has_result=result is not None,
+            )
 
+    log.debug("command_utils.integration_complete", notes=len(history_notes))
     return history_notes
 
 

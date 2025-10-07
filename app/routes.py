@@ -1,21 +1,37 @@
 # app/routes.py
 
-from fastapi import APIRouter, HTTPException, Query, Path, Body
-from pydantic import BaseModel
 from typing import Annotated, List, Optional
+
+import structlog
+from fastapi import APIRouter, Body, HTTPException, Path, Query
+from pydantic import BaseModel
+
 from app import symbol_store
-from app.symbol_store import Symbol
 from app.inference import run_query
+from app.logging_config import configure_logging
+from app.symbol_store import Symbol
+
+
+configure_logging()
+log = structlog.get_logger(__name__)
 
 router = APIRouter()
+
 
 class QueryRequest(BaseModel):
     query: str
     session_id: str
 
+
 @router.post("/query")
 async def query_inference(request: QueryRequest):
+    log.info(
+        "routes.query_inference",
+        session_id=request.session_id,
+        query_length=len(request.query),
+    )
     result = run_query(request.query, request.session_id)
+    log.info("routes.query_inference.completed", symbols=len(result.get("symbols_used", [])))
     return result
 
 
@@ -24,15 +40,28 @@ async def get_symbols(
     symbol_domain: Optional[str] = Query(None),
     symbol_tag: Optional[str] = Query(None),
     start_index: Optional[int] = Query(0),
-    limit: Optional[int] = Query(20, le=50)
+    limit: Optional[int] = Query(20, le=50),
 ):
-    return symbol_store.get_symbols(domain=symbol_domain, tag=symbol_tag, start=start_index, limit=limit)
+    log.debug(
+        "routes.get_symbols",
+        domain=symbol_domain,
+        tag=symbol_tag,
+        start=start_index,
+        limit=limit,
+    )
+    symbols = symbol_store.get_symbols(
+        domain=symbol_domain, tag=symbol_tag, start=start_index, limit=limit
+    )
+    log.info("routes.get_symbols.completed", count=len(symbols))
+    return symbols
 
 
 @router.get("/symbol/{id}")
 async def get_symbol_by_id(id: str = Path(..., description="Symbol ID")):
+    log.debug("routes.get_symbol", symbol_id=id)
     symbol = symbol_store.get_symbol(id)
     if symbol is None:
+        log.warning("routes.get_symbol.not_found", symbol_id=id)
         raise HTTPException(status_code=404, detail="Symbol not found")
     return symbol
 
@@ -40,20 +69,25 @@ async def get_symbol_by_id(id: str = Path(..., description="Symbol ID")):
 @router.put("/inject/{symbol_id}")
 async def put_symbol_by_id(
     symbol_id: str = Path(..., description="Symbol ID"),
-    symbol: Symbol = Body(...)
+    symbol: Symbol = Body(...),
 ):
+    log.info("routes.put_symbol", symbol_id=symbol_id)
     status = symbol_store.put_symbol(symbol_id, symbol)
     return {"status": status}
 
 
 @router.put("/inject/symbols")
 async def bulk_put_symbols(symbols: Annotated[List[Symbol], Body(..., embed=True)]):
+    log.info("routes.bulk_put_symbols", count=len(symbols))
     return {"status": symbol_store.put_symbols_bulk(symbols)}
 
 
 @router.get("/domains")
 async def list_domains():
     try:
-        return symbol_store.get_domains()
-    except Exception:
+        domains = symbol_store.get_domains()
+        log.info("routes.list_domains", count=len(domains))
+        return domains
+    except Exception as exc:
+        log.error("routes.list_domains.error", error=str(exc))
         raise HTTPException(status_code=500, detail="Could not retrieve domain list")

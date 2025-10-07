@@ -6,6 +6,8 @@ import os
 import random
 from typing import Dict, Iterable, List, Sequence, Tuple
 
+import structlog
+
 try:  # pragma: no cover - exercised implicitly when deps available
     import faiss  # type: ignore
 except Exception:  # pragma: no cover - optional dependency
@@ -21,7 +23,12 @@ try:  # pragma: no cover - exercised implicitly when deps available
 except Exception:  # pragma: no cover - optional dependency
     SentenceTransformer = None  # type: ignore
 
+from app.logging_config import configure_logging
 from app.types import Symbol
+
+
+configure_logging()
+log = structlog.get_logger(__name__)
 
 
 class _SimpleEncoder:
@@ -33,7 +40,9 @@ class _SimpleEncoder:
     def encode(self, text: str) -> List[float]:
         rng = random.Random()
         rng.seed(text)
-        return [rng.random() for _ in range(self.dimension)]
+        vector = [rng.random() for _ in range(self.dimension)]
+        log.debug("embedding_index.simple_encoder", dimension=self.dimension)
+        return vector
 
 
 class _InMemoryIndex:
@@ -45,10 +54,14 @@ class _InMemoryIndex:
 
     def reset(self) -> None:
         self._vectors: List[List[float]] = []
+        log.debug("embedding_index.reset")
 
     def add(self, vectors: Sequence[Sequence[float]]) -> None:
+        added = 0
         for vector in vectors:
             self._vectors.append([float(v) for v in vector])
+            added += 1
+        log.debug("embedding_index.added_vectors", count=added)
 
     def search(
         self, query_vectors: Sequence[Sequence[float]], k: int
@@ -78,6 +91,7 @@ class _InMemoryIndex:
             dists.append(float("inf"))
             indices.append(-1)
 
+        log.debug("embedding_index.search_results", count=len(distances))
         return [dists], [indices]
 
     @property
@@ -102,6 +116,7 @@ _USE_FAISS = (_BACKEND == "faiss" and _HAS_FAISS_STACK) or (
 
 if _BACKEND == "faiss" and not _HAS_FAISS_STACK:
     # Explicit faiss backend requested but dependencies missing; fall back gracefully.
+    log.warning("embedding_index.faiss_unavailable", backend=_BACKEND)
     _USE_FAISS = False
 
 _DIMENSION = 384 if _USE_FAISS else 32
@@ -109,13 +124,17 @@ _DIMENSION = 384 if _USE_FAISS else 32
 
 def _create_encoder():
     if _USE_FAISS and SentenceTransformer is not None:
+        log.info("embedding_index.encoder_initialised", backend="sentence_transformers")
         return SentenceTransformer("all-MiniLM-L6-v2")
+    log.info("embedding_index.encoder_initialised", backend="simple")
     return _SimpleEncoder(_DIMENSION)
 
 
 def _create_index():
     if _USE_FAISS and faiss is not None:
+        log.info("embedding_index.backend", implementation="faiss", dimension=_DIMENSION)
         return faiss.IndexFlatL2(_DIMENSION)
+    log.info("embedding_index.backend", implementation="in_memory", dimension=_DIMENSION)
     return _InMemoryIndex(_DIMENSION)
 
 
@@ -138,6 +157,7 @@ def _encode_for_storage(text: str):
 def _refresh_index() -> None:
     index.reset()
     if not index_data:
+        log.info("embedding_index.refresh_skipped")
         return
     if _USE_FAISS:
         assert np is not None
@@ -145,6 +165,7 @@ def _refresh_index() -> None:
         index.add(stacked)
     else:
         index.add(index_data)  # type: ignore[arg-type]
+    log.info("embedding_index.refreshed", entries=len(index_data))
 
 
 def build_index() -> None:
@@ -160,18 +181,21 @@ def build_index() -> None:
 
     for symbol in symbols:
         if not getattr(symbol, "macro", None):
+            log.debug("embedding_index.symbol_skipped", symbol_id=symbol.id)
             continue
         vector = _encode_for_storage(symbol.macro)
         symbol_index_map[symbol.id] = len(index_data)
         index_data.append(vector)
 
     _refresh_index()
+    log.info("embedding_index.built", count=len(index_data))
 
 
 def add_symbol(symbol: Symbol) -> None:
     """Add or update a single symbol in the embedding index."""
 
     if not getattr(symbol, "macro", None):
+        log.debug("embedding_index.add_skipped", symbol_id=getattr(symbol, "id", None))
         return
 
     vector = _encode_for_storage(symbol.macro)
@@ -180,9 +204,11 @@ def add_symbol(symbol: Symbol) -> None:
     if sid in symbol_index_map:
         position = symbol_index_map[sid]
         index_data[position] = vector
+        log.debug("embedding_index.updated_symbol", symbol_id=sid)
     else:
         symbol_index_map[sid] = len(index_data)
         index_data.append(vector)
+        log.debug("embedding_index.added_symbol", symbol_id=sid)
 
     _refresh_index()
 
@@ -191,6 +217,7 @@ def search(query: str, k: int = 5) -> List[Tuple[str, float]]:
     """Search for the most relevant symbols given a text query."""
 
     if not getattr(index, "is_trained", False) or getattr(index, "ntotal", 0) == 0:
+        log.debug("embedding_index.rebuild_required")
         build_index()
 
     query_vector = _encode_for_storage(query)
@@ -211,4 +238,5 @@ def search(query: str, k: int = 5) -> List[Tuple[str, float]]:
         if sid is not None:
             results.append((sid, float(dist)))
 
+    log.info("embedding_index.search_completed", query_length=len(query), results=len(results))
     return results
