@@ -1,5 +1,5 @@
 from typing import List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 class Facets(BaseModel):
     function: Optional[str] = None
@@ -29,3 +29,21 @@ class Symbol(BaseModel):
     version: Optional[int] = None
     origin: Optional[str] = None
     scope: Optional[List[str]] = None
+
+
+class AgentPersona(BaseModel):
+    class Config:
+        extra = "allow"
+
+    id: str
+    name: Optional[str] = None
+
+
+class KitDefinition(BaseModel):
+    class Config:
+        extra = "allow"
+
+    kit: str
+    triad: List[str] = Field(default_factory=list)
+    anchor: Optional[str] = None
+    exec: List[str] = Field(default_factory=list)

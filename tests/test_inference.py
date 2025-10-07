@@ -42,6 +42,16 @@ def test_run_query(monkeypatch):
             self.id = sid
             self.macro = "macro"
 
+    class DummyInterpreter:
+        def __init__(self):
+            self.inputs = []
+
+        def run(self, text):
+            self.inputs.append(text)
+            return [{"action": "noop", "result": text}]
+
+    interpreter = DummyInterpreter()
+
     monkeypatch.setattr(inference, "ContextManager", DummyContextManager)
     monkeypatch.setattr(inference, "ChatHistory", DummyChatHistory)
     monkeypatch.setattr(inference.embedding_index, "search", lambda query, k: [("s1", 0.1)])
@@ -49,9 +59,13 @@ def test_run_query(monkeypatch):
     monkeypatch.setattr(inference, "model_call", lambda prompt: f"response for {prompt}")
     monkeypatch.setattr(inference, "load_prompt_phase", lambda phase_id, workflow="user": f"{workflow}:{phase_id}")
     monkeypatch.setattr(inference, "WORKFLOW_PHASES", [("phase1", "user"), ("phase2", "user")], raising=False)
+    monkeypatch.setattr(inference, "CommandInterpreter", lambda: interpreter)
 
     result = inference.run_query("what?", "session-1", k=1)
 
     assert result["reply"].startswith("response for")
     assert result["symbols_used"] == ["s1"]
     assert result["history_length"] == 2
+    assert len(result["commands"]) == 2
+    assert all(item["action"] == "noop" for item in result["commands"])
+    assert interpreter.inputs == ["response for prompt::what?::1", "response for prompt::what?::1"]
