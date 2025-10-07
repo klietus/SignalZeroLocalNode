@@ -95,6 +95,21 @@ def test_bulk_put(monkeypatch):
     assert {sym.id for sym in listed} == {"s1", "s2"}
 
 
+def test_get_symbols_by_ids(monkeypatch):
+    fake = FakeRedis()
+    monkeypatch.setattr(symbol_store, "r", fake)
+    monkeypatch.setattr(symbol_store.embedding_index, "add_symbol", lambda symbol: None)
+
+    one = Symbol(id="s1", macro="one")
+    two = Symbol(id="s2", macro="two")
+    symbol_store.put_symbol(one.id, one)
+    symbol_store.put_symbol(two.id, two)
+
+    retrieved = symbol_store.get_symbols_by_ids(["s1", "missing", "s2"])
+
+    assert [sym.id for sym in retrieved] == ["s1", "s2"]
+
+
 def test_delete_symbol(monkeypatch):
     fake = FakeRedis()
     monkeypatch.setattr(symbol_store, "r", fake)

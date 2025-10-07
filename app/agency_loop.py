@@ -6,12 +6,15 @@ import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable, List, Sequence, Tuple
+from typing import Dict, Iterable, List, Sequence, Tuple
 
 from app.chat_history import ChatHistory
 from app.context_manager import ContextManager
 from app.model_call import model_call
+from app.command_interpreter import CommandInterpreter
+from app.command_utils import integrate_command_results
 from app.symbol_store import get_symbols
+from app.types import Symbol
 
 
 # ----- Configuration -----
@@ -101,10 +104,22 @@ def run_agency_loop() -> None:
         print(f"[{timestamp}] 🌀 SELF AGENCY LOOP: iteration {iteration} starting...")
 
         try:
-            symbols = get_symbols(domain=None, tag=None, start=0, limit=SYMBOL_LIMIT)
+            retrieved_symbols = get_symbols(
+                domain=None, tag=None, start=0, limit=SYMBOL_LIMIT
+            )
         except Exception as exc:  # pragma: no cover - defensive logging
             print(f"[{timestamp}] ⚠️ Failed to retrieve symbols: {exc}")
-            symbols = []
+            retrieved_symbols = []
+
+        context_symbols: List[Symbol] = []
+        symbol_lookup: Dict[str, Symbol] = {}
+        for symbol in retrieved_symbols:
+            if not getattr(symbol, "id", None):
+                continue
+            if symbol.id in symbol_lookup:
+                continue
+            context_symbols.append(symbol)
+            symbol_lookup[symbol.id] = symbol
 
         persistent_history = chat_history.get_history(SELF_SESSION_ID)
         iteration_history: List[Tuple[str, str]] = []
@@ -114,6 +129,8 @@ def run_agency_loop() -> None:
             "system",
             f"[iteration {iteration}] started at {timestamp}",
         )
+
+        interpreter = CommandInterpreter()
 
         for phase_id, phase_prompt in SELF_PHASES:
             phase_start = datetime.now(tz=timezone.utc).isoformat()
@@ -130,7 +147,7 @@ def run_agency_loop() -> None:
                     timestamp,
                     persistent_history,
                     iteration_history,
-                    symbols,
+                    context_symbols,
                 )
             except Exception as exc:  # pragma: no cover - defensive logging
                 error_ts = datetime.now(tz=timezone.utc).isoformat()
@@ -143,6 +160,15 @@ def run_agency_loop() -> None:
             chat_history.append_message(
                 SELF_SESSION_ID, "assistant", f"[{phase_id}] {reply}"
             )
+
+            phase_commands = interpreter.run(reply)
+            command_notes = integrate_command_results(
+                phase_commands, context_symbols, symbol_lookup
+            )
+            for note in command_notes:
+                formatted = f"[command][{phase_id}] {note}"
+                iteration_history.append(("system", formatted))
+                chat_history.append_message(SELF_SESSION_ID, "system", formatted)
 
         iteration_end = datetime.now(tz=timezone.utc).isoformat()
         print(

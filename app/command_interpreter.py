@@ -21,9 +21,8 @@ class CommandInterpreter:
             "load_symbol": self._handle_load_symbol,
             "load_kit": self._handle_load_kit,
             "invoke_agent": self._handle_invoke_agent,
-            # Stubs for unimplemented actions
-            "query_symbols": self._handle_stub,
-            "recurse_graph": self._handle_stub,
+            "query_symbols": self._handle_query_symbols,
+            "recurse_graph": self._handle_recurse_graph,
             "emit_feedback": self._handle_stub,
             "dispatch_task": self._handle_stub,
         }
@@ -72,7 +71,7 @@ class CommandInterpreter:
 
             handler = self._handlers.get(action, self._handle_unknown)
             result = handler(payload)
-            results.append({"action": action, "result": result})
+            results.append({"action": action, "result": result, "payload": payload})
 
         return results
 
@@ -184,6 +183,19 @@ class CommandInterpreter:
         if not agent:
             return {"status": "not_found", "agent_id": agent_id}
         return agent
+
+    def _handle_query_symbols(self, payload: Dict[str, Any]):
+        ids = payload.get("ids")
+        if isinstance(ids, list):
+            symbols = symbol_store.get_symbols_by_ids(ids)
+            return symbols
+        return {"status": "unsupported_query"}
+
+    def _handle_recurse_graph(self, payload: Dict[str, Any]):
+        # The calling context is responsible for materialising linked symbols.
+        depth = payload.get("depth")
+        query = payload.get("query")
+        return {"status": "queued", "depth": depth, "query": query}
 
     def _handle_stub(self, payload: Dict[str, Any]):
         return {"status": "not_implemented"}
