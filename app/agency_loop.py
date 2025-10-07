@@ -8,13 +8,20 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Iterable, List, Sequence, Tuple
 
+import structlog
+
 from app.chat_history import ChatHistory
-from app.context_manager import ContextManager
-from app.model_call import model_call
 from app.command_interpreter import CommandInterpreter
 from app.command_utils import integrate_command_results
+from app.context_manager import ContextManager
+from app.logging_config import configure_logging
+from app.model_call import model_call
 from app.symbol_store import get_symbols
 from app.types import Symbol
+
+
+configure_logging()
+log = structlog.get_logger(__name__)
 
 
 # ----- Configuration -----
@@ -29,8 +36,11 @@ LOOP_INTERVAL = int(os.getenv("AGENCY_LOOP_INTERVAL", "300"))
 
 def _load_prompt(path: Path) -> str:
     if not path.exists():
+        log.error("agency_loop.prompt_missing", path=str(path))
         raise FileNotFoundError(f"Prompt not found: {path}")
-    return path.read_text(encoding="utf-8").strip()
+    content = path.read_text(encoding="utf-8").strip()
+    log.debug("agency_loop.prompt_loaded", path=str(path), length=len(content))
+    return content
 
 
 def _load_shared_prompts() -> List[str]:
@@ -45,10 +55,13 @@ def _load_shared_prompts() -> List[str]:
 def _load_self_phases() -> List[Tuple[str, str]]:
     phase_files = sorted(SELF_PROMPT_DIR.glob("*.txt"))
     if not phase_files:
+        log.error("agency_loop.self_prompts_missing", directory=str(SELF_PROMPT_DIR))
         raise RuntimeError(
             "No self-agency prompt phases found in data/prompts/self."
         )
-    return [(path.stem, _load_prompt(path)) for path in phase_files]
+    phases = [(path.stem, _load_prompt(path)) for path in phase_files]
+    log.info("agency_loop.self_prompts_loaded", count=len(phases))
+    return phases
 
 
 SHARED_PROMPTS: List[str] = _load_shared_prompts()
@@ -91,6 +104,15 @@ def _run_phase(
         "and provide structured output."
     )
     prompt_text = ctx.build_prompt(user_prompt)
+    log.debug(
+        "agency_loop.phase_invocation",
+        phase_id=phase_id,
+        iteration=iteration,
+        timestamp=timestamp,
+        base_history=len(base_history),
+        interim_history=len(interim_history),
+        symbol_count=len(list(symbols)),
+    )
     return model_call(prompt_text)
 
 
@@ -101,14 +123,18 @@ def run_agency_loop() -> None:
     while True:
         iteration += 1
         timestamp = datetime.now(tz=timezone.utc).isoformat()
-        print(f"[{timestamp}] 🌀 SELF AGENCY LOOP: iteration {iteration} starting...")
+        log.info("agency_loop.iteration_start", iteration=iteration, timestamp=timestamp)
 
         try:
             retrieved_symbols = get_symbols(
                 domain=None, tag=None, start=0, limit=SYMBOL_LIMIT
             )
         except Exception as exc:  # pragma: no cover - defensive logging
-            print(f"[{timestamp}] ⚠️ Failed to retrieve symbols: {exc}")
+            log.warning(
+                "agency_loop.symbol_retrieval_failed",
+                iteration=iteration,
+                error=str(exc),
+            )
             retrieved_symbols = []
 
         context_symbols: List[Symbol] = []
@@ -131,12 +157,19 @@ def run_agency_loop() -> None:
         )
 
         interpreter = CommandInterpreter()
+        log.debug(
+            "agency_loop.interpreter_created",
+            handler_count=interpreter.handler_count,
+        )
 
         for phase_id, phase_prompt in SELF_PHASES:
             phase_start = datetime.now(tz=timezone.utc).isoformat()
-            print(
-                f"[{phase_start}] ➡️ SELF phase {phase_id}: invoking model with"
-                f" {len(persistent_history) + len(iteration_history)} prior turns"
+            log.info(
+                "agency_loop.phase_start",
+                phase_id=phase_id,
+                phase_start=phase_start,
+                iteration=iteration,
+                prior_turns=len(persistent_history) + len(iteration_history),
             )
 
             try:
@@ -151,9 +184,18 @@ def run_agency_loop() -> None:
                 )
             except Exception as exc:  # pragma: no cover - defensive logging
                 error_ts = datetime.now(tz=timezone.utc).isoformat()
-                error_msg = f"[{error_ts}] ❌ Phase {phase_id} failed: {exc}"
-                print(error_msg)
-                chat_history.append_message(SELF_SESSION_ID, "system", error_msg)
+                log.error(
+                    "agency_loop.phase_failed",
+                    phase_id=phase_id,
+                    iteration=iteration,
+                    error=str(exc),
+                    timestamp=error_ts,
+                )
+                chat_history.append_message(
+                    SELF_SESSION_ID,
+                    "system",
+                    f"[{error_ts}] Phase {phase_id} failed: {exc}",
+                )
                 break
 
             iteration_history.append(("assistant", reply))
@@ -169,10 +211,20 @@ def run_agency_loop() -> None:
                 formatted = f"[command][{phase_id}] {note}"
                 iteration_history.append(("system", formatted))
                 chat_history.append_message(SELF_SESSION_ID, "system", formatted)
+            log.debug(
+                "agency_loop.phase_complete",
+                phase_id=phase_id,
+                iteration=iteration,
+                commands=len(phase_commands),
+                command_notes=len(command_notes),
+            )
 
         iteration_end = datetime.now(tz=timezone.utc).isoformat()
-        print(
-            f"[{iteration_end}] ✅ SELF AGENCY LOOP: iteration {iteration} complete."
+        log.info(
+            "agency_loop.iteration_complete",
+            iteration=iteration,
+            timestamp=iteration_end,
+            history_entries=len(iteration_history),
         )
 
         time.sleep(LOOP_INTERVAL)

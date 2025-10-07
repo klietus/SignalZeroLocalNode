@@ -3,6 +3,14 @@ from __future__ import annotations
 
 from typing import List
 
+import structlog
+
+from app.logging_config import configure_logging
+
+
+configure_logging()
+log = structlog.get_logger(__name__)
+
 try:  # pragma: no cover - optional dependency
     import tiktoken
 except Exception:  # pragma: no cover - optional dependency
@@ -31,16 +39,28 @@ class ContextManager:
         self.symbols = []  # list of dicts with keys: id, triad, description, relevance
         self.history = []  # list of (role, content) tuples
         self.system_prompts = []  # ordered system prompts
+        log.debug(
+            "context_manager.initialised",
+            max_tokens=max_tokens,
+            system_reserved=system_reserved,
+        )
 
     def add_system_prompt(self, content):
         self.system_prompts.append(content)
+        log.debug(
+            "context_manager.system_prompt_added",
+            prompt_length=len(content),
+            total=len(self.system_prompts),
+        )
 
     def add_symbol(self, symbol, relevance=1.0):
         setattr(symbol, "relevance", relevance)
         self.symbols.append(symbol)
+        log.debug("context_manager.symbol_added", symbol_id=getattr(symbol, "id", None))
 
     def add_history(self, role, content):
         self.history.append((role, content))
+        log.debug("context_manager.history_added", role=role, length=len(content))
 
     def pack_symbols(self, token_budget):
         sorted_syms = sorted(self.symbols, key=lambda x: -getattr(x, "relevance", 0.0))
@@ -92,4 +112,10 @@ class ContextManager:
         prompt_parts.append("CHAT_HISTORY:")
         prompt_parts.append(hist)
         prompt_parts.append(f"USER: {user_prompt}")
+        log.debug(
+            "context_manager.prompt_built",
+            system_prompts=len(self.system_prompts),
+            symbol_characters=len(sym),
+            history_characters=len(hist),
+        )
         return "\n\n".join(prompt_parts)

@@ -4,8 +4,14 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 import requests
+import structlog
 
 from app.config import get_settings
+from app.logging_config import configure_logging
+
+
+configure_logging()
+log = structlog.get_logger(__name__)
 
 settings = get_settings()
 _openai_client: Optional[Any] = None
@@ -32,13 +38,25 @@ def _call_local_model(prompt: str) -> str:
         "num_predict": settings.model_num_predict,
     }
 
+    log.debug(
+        "model_call.local.request",
+        url=settings.model_api_url,
+        model=settings.model_name,
+    )
+
     response = requests.post(settings.model_api_url, json=payload, timeout=300)
     if response.status_code != 200:
+        log.error(
+            "model_call.local.error",
+            status=response.status_code,
+            body=response.text,
+        )
         raise RuntimeError(
             f"Model API failed: {response.status_code} - {response.text}"
         )
 
     data = response.json()
+    log.info("model_call.local.success", tokens=len(data.get("response", "")))
     return data["response"]
 
 
@@ -67,6 +85,7 @@ def _call_openai_model(prompt: str) -> str:
     """Call the OpenAI API using the configured model."""
 
     if not settings.openai_api_key:
+        log.error("model_call.openai.missing_key")
         raise RuntimeError("OPENAI_API_KEY must be set when MODEL_PROVIDER=openai")
 
     global _openai_client
@@ -75,6 +94,7 @@ def _call_openai_model(prompt: str) -> str:
         if settings.openai_base_url:
             client_kwargs["base_url"] = settings.openai_base_url
         _openai_client = OpenAI(**client_kwargs)  # type: ignore[call-arg]
+        log.info("model_call.openai.client_initialised", has_base_url=bool(settings.openai_base_url))
 
     response = _openai_client.chat.completions.create(  # type: ignore[union-attr]
         model=settings.openai_model,
@@ -84,16 +104,17 @@ def _call_openai_model(prompt: str) -> str:
     )
 
     if not response.choices:
+        log.error("model_call.openai.no_choices")
         raise RuntimeError("OpenAI response contained no choices")
 
     message = response.choices[0].message
-    return _normalise_openai_response_content(message.content)
+    content = _normalise_openai_response_content(message.content)
+    log.info("model_call.openai.success", content_length=len(content))
+    return content
 
 
 def model_call(prompt: str) -> str:
     """Call the configured model provider with the supplied prompt."""
-
-    print("sending: " + prompt)
 
     if settings.model_provider == "openai":
         result = _call_openai_model(prompt)
@@ -104,5 +125,10 @@ def model_call(prompt: str) -> str:
             f"Unsupported MODEL_PROVIDER configured: {settings.model_provider}"
         )
 
-    print("received:" + result)
+    log.info(
+        "model_call.completed",
+        provider=settings.model_provider,
+        prompt_length=len(prompt),
+        result_length=len(result),
+    )
     return result

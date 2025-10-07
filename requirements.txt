@@ -9,3 +9,4 @@ httpx
 tiktoken
 openai
 pytest
+structlog
