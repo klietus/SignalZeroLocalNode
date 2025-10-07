@@ -70,7 +70,6 @@ class ContextManager:
 
         for s in sorted_syms:
             triad = s.triad or []
-            desc = s.description or ""
             macro = s.macro or ""
 
             line = f"{s.id} | {s.name} |{' '.join(triad)} | {macro}"

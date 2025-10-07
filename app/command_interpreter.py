@@ -115,11 +115,9 @@ class CommandInterpreter:
         depth = 0
         in_string = False
         escape = False
-        end_index = start_index
 
         for index in range(start_index, len(text)):
             char = text[index]
-            end_index = index
 
             if in_string:
                 if escape:
