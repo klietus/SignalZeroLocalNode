@@ -7,9 +7,15 @@ import os
 from pathlib import Path
 
 import redis
+import structlog
 
 from app import embedding_index
+from app.logging_config import configure_logging
 from app.types import AgentPersona, KitDefinition, Symbol
+
+
+configure_logging()
+log = structlog.get_logger(__name__)
 
 # --------- Redis Setup ---------
 
@@ -30,6 +36,7 @@ def load_agents(path: str = "data/agents.json") -> int:
     agents_index.clear()
     file_path = Path(path)
     if not file_path.exists():
+        log.warning("symbol_store.agents_file_missing", path=str(file_path))
         return 0
 
     raw = json.loads(file_path.read_text(encoding="utf-8"))
@@ -42,7 +49,13 @@ def load_agents(path: str = "data/agents.json") -> int:
             agents_index[agent.id] = agent
             count += 1
         except Exception as exc:  # pragma: no cover - logging for malformed agents
-            print(f"[SymbolStore] Failed to load agent persona: {persona} — {exc}")
+            log.error(
+                "symbol_store.agent_load_failed",
+                payload=persona,
+                error=str(exc),
+            )
+
+    log.info("symbol_store.agents_loaded", count=count)
 
     return count
 
@@ -51,6 +64,7 @@ def load_kits(path: str = "data/kits.min.json") -> int:
     kits_index.clear()
     file_path = Path(path)
     if not file_path.exists():
+        log.warning("symbol_store.kits_file_missing", path=str(file_path))
         return 0
 
     raw = json.loads(file_path.read_text(encoding="utf-8"))
@@ -64,8 +78,13 @@ def load_kits(path: str = "data/kits.min.json") -> int:
             kits_index[kit.kit] = kit
             count += 1
         except Exception as exc:  # pragma: no cover - logging for malformed kits
-            print(f"[SymbolStore] Failed to load kit definition: {item} — {exc}")
+            log.error(
+                "symbol_store.kit_load_failed",
+                payload=item,
+                error=str(exc),
+            )
 
+    log.info("symbol_store.kits_loaded", count=count)
     return count
 
 
@@ -83,6 +102,7 @@ def _resolve_symbol_id(symbol_id: Optional[str]):
 def get_kit(kit_id: str) -> Optional[dict]:
     kit = kits_index.get(kit_id)
     if not kit:
+        log.debug("symbol_store.kit_missing", kit_id=kit_id)
         return None
 
     resolved = kit.model_dump()
@@ -97,6 +117,8 @@ def get_kit(kit_id: str) -> Optional[dict]:
 
 def load_symbol_store_if_empty(path: str = "data/symbol_catalog.min.json"):
 
+    log.info("symbol_store.initialise_if_empty", path=path)
+
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
@@ -110,9 +132,13 @@ def load_symbol_store_if_empty(path: str = "data/symbol_catalog.min.json"):
             r.set(f"symbol:{symbol.id}", symbol.model_dump_json())
             count += 1
         except Exception as e:
-            print(f"[SymbolStore] Failed to load symbol: {s.get('id', '[unknown]')} — {e}")
+            log.error(
+                "symbol_store.symbol_load_failed",
+                symbol_id=s.get("id", "[unknown]"),
+                error=str(e),
+            )
 
-    print(f"[SymbolStore] Loaded {count} symbols into Redis and embedding index.")
+    log.info("symbol_store.symbols_loaded", count=count)
     load_agents()
     load_kits()
 
@@ -122,6 +148,8 @@ def _key(symbol_id: str) -> str:
 
 def get_symbol(symbol_id: str) -> Optional[Symbol]:
     raw = r.get(_key(symbol_id))
+    if not raw:
+        log.debug("symbol_store.symbol_missing", symbol_id=symbol_id)
     return Symbol.model_validate_json(raw) if raw else None
 
 
@@ -130,6 +158,7 @@ def put_symbol(symbol_id: str, symbol: Symbol) -> str:
     embedding_index.add_symbol(symbol)
     if symbol.symbol_domain:
         r.sadd("domains", symbol.symbol_domain)
+    log.info("symbol_store.symbol_stored", symbol_id=symbol_id)
     return "stored"
 
 
@@ -138,8 +167,15 @@ def delete_symbol(symbol_id: str) -> bool:
     if removed:
         try:
             embedding_index.build_index()
+            log.info("symbol_store.symbol_deleted", symbol_id=symbol_id)
         except Exception as exc:  # pragma: no cover - rebuild failures are logged
-            print(f"[SymbolStore] Failed to rebuild index after delete: {exc}")
+            log.error(
+                "symbol_store.index_rebuild_failed",
+                symbol_id=symbol_id,
+                error=str(exc),
+            )
+    else:
+        log.debug("symbol_store.delete_noop", symbol_id=symbol_id)
     return bool(removed)
 
 
@@ -151,6 +187,7 @@ def put_symbols_bulk(symbols: List[Symbol]) -> str:
         if s.symbol_domain:
             pipe.sadd("domains", s.symbol_domain)
     pipe.execute()
+    log.info("symbol_store.bulk_stored", count=len(symbols))
     return "bulk_stored"
 
 
@@ -169,16 +206,27 @@ def get_symbols(domain: Optional[str], tag: Optional[str], start: int, limit: in
             continue
         results.append(symbol)
 
-    return results[start:start + limit]
+    sliced = results[start:start + limit]
+    log.debug(
+        "symbol_store.symbols_fetched",
+        total=len(results),
+        returned=len(sliced),
+        domain=domain,
+        tag=tag,
+    )
+    return sliced
 
 
 def get_domains() -> List[str]:
-    return list(r.smembers("domains"))
+    domains = list(r.smembers("domains"))
+    log.debug("symbol_store.domains_fetched", count=len(domains))
+    return domains
 
 
 def get_symbols_by_ids(symbol_ids: Iterable[str]) -> List[Symbol]:
     ids: List[str] = [symbol_id for symbol_id in symbol_ids if isinstance(symbol_id, str)]
     if not ids:
+        log.debug("symbol_store.bulk_fetch_empty")
         return []
 
     keys = [_key(symbol_id) for symbol_id in ids]
@@ -187,10 +235,16 @@ def get_symbols_by_ids(symbol_ids: Iterable[str]) -> List[Symbol]:
     symbols: List[Symbol] = []
     for symbol_id, raw in zip(ids, raw_values):
         if not raw:
+            log.debug("symbol_store.symbol_missing_bulk", symbol_id=symbol_id)
             continue
         try:
             symbols.append(Symbol.model_validate_json(raw))
         except Exception as exc:  # pragma: no cover - validation errors logged
-            print(f"[SymbolStore] Failed to decode symbol {symbol_id}: {exc}")
+            log.error(
+                "symbol_store.symbol_decode_failed",
+                symbol_id=symbol_id,
+                error=str(exc),
+            )
+    log.debug("symbol_store.bulk_fetch_completed", requested=len(ids), returned=len(symbols))
     return symbols
 

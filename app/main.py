@@ -1,18 +1,28 @@
-# main.py
+"""FastAPI application definition and lifecycle hooks."""
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 from app import routes
-from app.symbol_store import load_symbol_store_if_empty
 from app.embedding_index import build_index
+from app.logging_config import configure_logging
+from app.symbol_store import load_symbol_store_if_empty
+
+import structlog
+
+
+configure_logging()
+log = structlog.get_logger(__name__)
+
 
 app = FastAPI(
     title="SignalZero Local Node",
     description="Local symbolic API runtime for SignalZero",
-    version="0.1.0"
+    version="0.1.0",
 )
 
-# CORS Middleware (adjust for deployment)
+log.info("app.initialised", title=app.title, version=app.version)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # restrict in production
@@ -21,15 +31,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include route definitions from app.routes
 app.include_router(routes.router)
 
-# Optional: root health check
+
 @app.get("/")
-def read_root():
+def read_root() -> dict:
+    log.debug("app.healthcheck")
     return {"status": "SignalZero Local Node Live"}
 
+
 @app.on_event("startup")
-async def startup_event():
+async def startup_event() -> None:
+    log.info("app.startup.begin")
     load_symbol_store_if_empty()
+    log.info("app.startup.symbol_store_ready")
     build_index()
+    log.info("app.startup.embedding_index_ready")

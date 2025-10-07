@@ -4,8 +4,15 @@ from __future__ import annotations
 import json
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+import structlog
+
 from app import symbol_store
+from app.logging_config import configure_logging
 from app.types import Symbol
+
+
+configure_logging()
+log = structlog.get_logger(__name__)
 
 
 class CommandInterpreter:
@@ -26,6 +33,11 @@ class CommandInterpreter:
             "emit_feedback": self._handle_stub,
             "dispatch_task": self._handle_stub,
         }
+        log.debug("command_interpreter.initialised", handler_count=len(self._handlers))
+
+    @property
+    def handler_count(self) -> int:
+        return len(self._handlers)
 
     # ------------------------------------------------------------------
     # Public API
@@ -57,6 +69,7 @@ class CommandInterpreter:
             if isinstance(payload, dict):
                 commands.append(payload)
 
+        log.debug("command_interpreter.parsed", command_count=len(commands))
         return commands
 
     def execute_commands(self, commands: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -67,10 +80,21 @@ class CommandInterpreter:
             action = payload.get("action")
             if not action:
                 results.append({"error": "missing_action", "payload": payload})
+                log.warning("command_interpreter.missing_action", payload=payload)
                 continue
 
             handler = self._handlers.get(action, self._handle_unknown)
-            result = handler(payload)
+            try:
+                result = handler(payload)
+                log.info("command_interpreter.executed", action=action)
+            except Exception as exc:  # pragma: no cover - defensive logging
+                log.error(
+                    "command_interpreter.execution_failed",
+                    action=action,
+                    error=str(exc),
+                    payload=payload,
+                )
+                result = {"status": "error", "reason": str(exc)}
             results.append({"action": action, "result": result, "payload": payload})
 
         return results
@@ -80,6 +104,7 @@ class CommandInterpreter:
 
         commands = self.parse_commands(text)
         if not commands:
+            log.debug("command_interpreter.run_empty")
             return []
         return self.execute_commands(commands)
 
@@ -130,6 +155,7 @@ class CommandInterpreter:
 
         symbol = Symbol(**symbol_data)
         symbol_store.put_symbol(symbol.id, symbol)
+        log.info("command_interpreter.store_symbol", symbol_id=symbol.id)
         return symbol
 
     def _handle_update_symbol(self, payload: Dict[str, Any]):
@@ -142,6 +168,7 @@ class CommandInterpreter:
         base.update(symbol_data)
         updated = Symbol(**base)
         symbol_store.put_symbol(updated.id, updated)
+        log.info("command_interpreter.update_symbol", symbol_id=updated.id)
         return updated
 
     def _handle_delete_symbol(self, payload: Dict[str, Any]):
@@ -149,6 +176,7 @@ class CommandInterpreter:
         if not symbol_id:
             return {"status": "error", "reason": "missing_symbol_id"}
         removed = symbol_store.delete_symbol(symbol_id)
+        log.info("command_interpreter.delete_symbol", symbol_id=symbol_id, removed=removed)
         return {"status": "deleted" if removed else "not_found", "id": symbol_id}
 
     def _handle_load_symbol(self, payload: Dict[str, Any]):
@@ -158,7 +186,9 @@ class CommandInterpreter:
         if not isinstance(ids, list):
             return []
         symbols = [symbol_store.get_symbol(symbol_id) for symbol_id in ids]
-        return [symbol for symbol in symbols if symbol]
+        found = [symbol for symbol in symbols if symbol]
+        log.info("command_interpreter.load_symbols", requested=len(ids), returned=len(found))
+        return found
 
     def _handle_load_kit(self, payload: Dict[str, Any]):
         kit_id = payload.get("kit_id") or payload.get("kit")
@@ -173,6 +203,7 @@ class CommandInterpreter:
         anchor = kit.get("anchor")
         if anchor is not None:
             resolved["anchor"] = anchor
+        log.info("command_interpreter.load_kit", kit_id=kit_id)
         return resolved
 
     def _handle_invoke_agent(self, payload: Dict[str, Any]):
@@ -182,12 +213,14 @@ class CommandInterpreter:
         agent = symbol_store.get_agent(agent_id)
         if not agent:
             return {"status": "not_found", "agent_id": agent_id}
+        log.info("command_interpreter.invoke_agent", agent_id=agent_id)
         return agent
 
     def _handle_query_symbols(self, payload: Dict[str, Any]):
         ids = payload.get("ids")
         if isinstance(ids, list):
             symbols = symbol_store.get_symbols_by_ids(ids)
+            log.info("command_interpreter.query_symbols", requested=len(ids), returned=len(symbols))
             return symbols
         return {"status": "unsupported_query"}
 
@@ -195,12 +228,15 @@ class CommandInterpreter:
         # The calling context is responsible for materialising linked symbols.
         depth = payload.get("depth")
         query = payload.get("query")
+        log.debug("command_interpreter.recurse_graph", depth=depth, query=query)
         return {"status": "queued", "depth": depth, "query": query}
 
     def _handle_stub(self, payload: Dict[str, Any]):
+        log.debug("command_interpreter.stub_called", payload=payload.get("action"))
         return {"status": "not_implemented"}
 
     def _handle_unknown(self, payload: Dict[str, Any]):
+        log.warning("command_interpreter.unknown_action", payload=payload)
         return {"status": "unknown_action", "payload": payload}
 
 
