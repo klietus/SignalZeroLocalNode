@@ -2,6 +2,11 @@ import json
 from pathlib import Path
 from typing import List, Tuple
 
+from app.logging_config import get_logger
+
+
+log = get_logger(__name__)
+
 from app.encryption import EncryptionError, get_cipher
 
 class ChatHistory:
