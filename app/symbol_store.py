@@ -23,7 +23,7 @@ r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=
 
 symbol_index: dict[str, Symbol] = {}
 
-def load_symbol_store_if_empty(path="data/symbol_catalog.json"):
+def load_symbol_store_if_empty(path="data/symbol_catalog.min.json"):
 
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
