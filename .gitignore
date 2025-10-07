@@ -30,6 +30,7 @@ htmlcov/
 chat_sessions/
 dump.rdb
 *.log
+data/chat_encryption.key
 
 # Database snapshots
 *.sqlite
