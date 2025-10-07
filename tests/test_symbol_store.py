@@ -28,6 +28,9 @@ class FakeRedis:
     def smembers(self, name):
         return set(self.sets.get(name, set()))
 
+    def delete(self, key):
+        return 1 if self.store.pop(key, None) is not None else 0
+
     # Pipeline support -------------------------------------------------
     def pipeline(self):
         return self
@@ -90,3 +93,48 @@ def test_bulk_put(monkeypatch):
 
     listed = symbol_store.get_symbols(domain=None, tag=None, start=0, limit=10)
     assert {sym.id for sym in listed} == {"s1", "s2"}
+
+
+def test_delete_symbol(monkeypatch):
+    fake = FakeRedis()
+    monkeypatch.setattr(symbol_store, "r", fake)
+    monkeypatch.setattr(symbol_store.embedding_index, "add_symbol", lambda symbol: None)
+    monkeypatch.setattr(symbol_store.embedding_index, "build_index", lambda: None)
+
+    symbol = Symbol(id="s1", macro="macro", symbol_domain="domain")
+    symbol_store.put_symbol("s1", symbol)
+
+    status = symbol_store.delete_symbol("s1")
+    assert status is True
+    assert symbol_store.get_symbol("s1") is None
+
+
+def test_load_kits_and_agents(monkeypatch, tmp_path):
+    fake = FakeRedis()
+    monkeypatch.setattr(symbol_store, "r", fake)
+    monkeypatch.setattr(symbol_store.embedding_index, "add_symbol", lambda symbol: None)
+
+    base_symbol = Symbol(id="SYM-1", macro="macro")
+    symbol_store.put_symbol(base_symbol.id, base_symbol)
+
+    kits_path = tmp_path / "kits.json"
+    kits_path.write_text(symbol_store.json.dumps([
+        {"kit": "kit-one", "triad": ["SYM-1"], "exec": ["SYM-1"], "anchor": "SYM-1", "note": "demo"}
+    ]))
+
+    agents_path = tmp_path / "agents.json"
+    agents_path.write_text(symbol_store.json.dumps({
+        "personas": [{"id": "AG-1", "name": "Agent"}]
+    }))
+
+    symbol_store.load_kits(path=str(kits_path))
+    symbol_store.load_agents(path=str(agents_path))
+
+    kit = symbol_store.get_kit("kit-one")
+    assert kit is not None
+    assert kit["triad"] and isinstance(kit["triad"][0], Symbol)
+    assert kit["anchor"].id == "SYM-1"
+
+    agent = symbol_store.get_agent("AG-1")
+    assert agent is not None
+    assert agent.name == "Agent"
