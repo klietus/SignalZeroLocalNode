@@ -46,3 +46,15 @@ SignalZero Local Node reads its runtime configuration from environment variables
 | `OPENAI_MAX_OUTPUT_TOKENS` | `256` | Maximum tokens returned from OpenAI. |
 
 Set `MODEL_PROVIDER=openai` together with the relevant OpenAI environment variables to call OpenAI-hosted models. Leave the provider at its default `local` value to continue using a self-hosted model endpoint.
+
+---
+
+## 🧪 Testing
+
+The project ships with a pytest-based test suite that exercises the FastAPI application, symbol store, and utility modules. After installing the dependencies, run the tests with:
+
+```bash
+python scripts/run_tests.py
+```
+
+You can pass additional pytest arguments if needed, for example `python scripts/run_tests.py -k chat_history`.

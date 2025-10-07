@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, HTTPException, Query, Path, Body
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import Annotated, List, Optional
 from app import symbol_store
 from app.symbol_store import Symbol
 from app.inference import run_query
@@ -47,7 +47,7 @@ async def put_symbol_by_id(
 
 
 @router.put("/inject/symbols")
-async def bulk_put_symbols(symbols: List[Symbol] = Body(...)):
+async def bulk_put_symbols(symbols: Annotated[List[Symbol], Body(..., embed=True)]):
     return {"status": symbol_store.put_symbols_bulk(symbols)}
 
 

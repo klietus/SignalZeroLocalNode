@@ -13,7 +13,6 @@ def load_prompt_phase(phase_id: str, workflow: str = "user") -> str:
     if not path.exists():
         raise FileNotFoundError(f"Prompt phase not found: {path}")
     return path.read_text().strip()
-    return phase_path.read_text().strip()
 
 WORKFLOW_PHASES = [
     ("00-init", "user"),

@@ -1,10 +1,33 @@
-import tiktoken
+"""Conversation context assembly utilities."""
+from __future__ import annotations
+
+from typing import List
+
+try:  # pragma: no cover - optional dependency
+    import tiktoken
+except Exception:  # pragma: no cover - optional dependency
+    tiktoken = None  # type: ignore
+
+
+class _SimpleEncoder:
+    def encode(self, text: str) -> List[int]:
+        return [len(token) for token in text.split()]
+
+
+def _get_encoder():
+    if tiktoken is None:
+        return _SimpleEncoder()
+    try:
+        return tiktoken.get_encoding("cl100k_base")
+    except Exception:  # pragma: no cover - network resilience
+        return _SimpleEncoder()
+
 
 class ContextManager:
     def __init__(self, max_tokens=8192, system_reserved=1000):
         self.max_tokens = max_tokens
         self.system_reserved = system_reserved
-        self.encoder = tiktoken.get_encoding("cl100k_base")
+        self.encoder = _get_encoder()
         self.symbols = []  # list of dicts with keys: id, triad, description, relevance
         self.history = []  # list of (role, content) tuples
         self.system_prompts = []  # ordered system prompts
@@ -12,7 +35,7 @@ class ContextManager:
     def add_system_prompt(self, content):
         self.system_prompts.append(content)
 
-    def add_symbol(self, symbol, relevance = 1.0):
+    def add_symbol(self, symbol, relevance=1.0):
         setattr(symbol, "relevance", relevance)
         self.symbols.append(symbol)
 
@@ -30,7 +53,7 @@ class ContextManager:
             desc = s.description or ""
             macro = s.macro or ""
 
-            line = f'{s.id} | {s.name} |{" ".join(triad)} | {macro}'
+            line = f"{s.id} | {s.name} |{' '.join(triad)} | {macro}"
             t = len(self.encoder.encode(line))
             if tokens_used + t > token_budget:
                 break
@@ -70,4 +93,3 @@ class ContextManager:
         prompt_parts.append(hist)
         prompt_parts.append(f"USER: {user_prompt}")
         return "\n\n".join(prompt_parts)
-

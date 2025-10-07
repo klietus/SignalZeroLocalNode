@@ -1,72 +1,214 @@
-import faiss
-import numpy as np
-from typing import List, Tuple
-from sentence_transformers import SentenceTransformer
+"""Symbol embedding index utilities with optional lightweight backend."""
+from __future__ import annotations
+
+import math
+import os
+import random
+from typing import Dict, Iterable, List, Sequence, Tuple
+
+try:  # pragma: no cover - exercised implicitly when deps available
+    import faiss  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+    faiss = None  # type: ignore
+
+try:  # pragma: no cover - exercised implicitly when deps available
+    import numpy as np  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+    np = None  # type: ignore
+
+try:  # pragma: no cover - exercised implicitly when deps available
+    from sentence_transformers import SentenceTransformer  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+    SentenceTransformer = None  # type: ignore
+
 from app.types import Symbol
 
-model = SentenceTransformer("all-MiniLM-L6-v2")
-dimension = 384
-index = faiss.IndexFlatL2(dimension)
-symbol_index_map: dict[str, int] = {}
-index_data: List[np.ndarray] = []
 
-def build_index():
-    global index, symbol_index_map, index_data
+class _SimpleEncoder:
+    """Deterministic text encoder used when sentence-transformers is unavailable."""
+
+    def __init__(self, dimension: int):
+        self.dimension = dimension
+
+    def encode(self, text: str) -> List[float]:
+        rng = random.Random()
+        rng.seed(text)
+        return [rng.random() for _ in range(self.dimension)]
+
+
+class _InMemoryIndex:
+    """Lightweight in-memory index used as a fallback when FAISS is unavailable."""
+
+    def __init__(self, dimension: int):
+        self.dimension = dimension
+        self.reset()
+
+    def reset(self) -> None:
+        self._vectors: List[List[float]] = []
+
+    def add(self, vectors: Sequence[Sequence[float]]) -> None:
+        for vector in vectors:
+            self._vectors.append([float(v) for v in vector])
+
+    def search(
+        self, query_vectors: Sequence[Sequence[float]], k: int
+    ) -> Tuple[List[List[float]], List[List[int]]]:
+        if not query_vectors:
+            return [[float("inf") for _ in range(k)]], [[-1 for _ in range(k)]]
+
+        query = list(query_vectors[0])
+        distances: List[Tuple[float, int]] = []
+
+        for idx, vector in enumerate(self._vectors):
+            if not vector:
+                continue
+            # Euclidean distance
+            dist = math.sqrt(
+                sum((float(a) - float(b)) ** 2 for a, b in zip(query, vector))
+            )
+            distances.append((dist, idx))
+
+        distances.sort(key=lambda item: item[0])
+        top = distances[:k]
+
+        dists = [dist for dist, _ in top]
+        indices = [idx for _, idx in top]
+
+        while len(dists) < k:
+            dists.append(float("inf"))
+            indices.append(-1)
+
+        return [dists], [indices]
+
+    @property
+    def is_trained(self) -> bool:
+        return bool(self._vectors)
+
+    @property
+    def ntotal(self) -> int:
+        return len(self._vectors)
+
+
+_BACKEND = os.getenv("EMBEDDING_INDEX_BACKEND", "auto").lower()
+_HAS_FAISS_STACK = (
+    faiss is not None
+    and np is not None
+    and SentenceTransformer is not None
+)
+
+_USE_FAISS = (_BACKEND == "faiss" and _HAS_FAISS_STACK) or (
+    _BACKEND == "auto" and _HAS_FAISS_STACK
+)
+
+if _BACKEND == "faiss" and not _HAS_FAISS_STACK:
+    # Explicit faiss backend requested but dependencies missing; fall back gracefully.
+    _USE_FAISS = False
+
+_DIMENSION = 384 if _USE_FAISS else 32
+
+
+def _create_encoder():
+    if _USE_FAISS and SentenceTransformer is not None:
+        return SentenceTransformer("all-MiniLM-L6-v2")
+    return _SimpleEncoder(_DIMENSION)
+
+
+def _create_index():
+    if _USE_FAISS and faiss is not None:
+        return faiss.IndexFlatL2(_DIMENSION)
+    return _InMemoryIndex(_DIMENSION)
+
+
+model = _create_encoder()
+index = _create_index()
+symbol_index_map: Dict[str, int] = {}
+index_data: List[Iterable[float]] = []
+
+
+def _encode_for_storage(text: str):
+    vector = model.encode(text)
+    if _USE_FAISS:
+        assert np is not None  # for type checkers
+        if not isinstance(vector, np.ndarray):
+            vector = np.asarray(vector, dtype="float32")
+        return vector.astype("float32")
+    return [float(v) for v in vector]
+
+
+def _refresh_index() -> None:
+    index.reset()
+    if not index_data:
+        return
+    if _USE_FAISS:
+        assert np is not None
+        stacked = np.stack(list(index_data)).astype("float32")
+        index.add(stacked)
+    else:
+        index.add(index_data)  # type: ignore[arg-type]
+
+
+def build_index() -> None:
+    """Build the embedding index from persisted symbols."""
+
+    global symbol_index_map, index_data
     from app.symbol_store import get_symbols
+
     symbols = get_symbols(domain=None, tag=None, start=0, limit=10000)
-    symbol_index_map.clear()
-    index_data.clear()
 
-    embeddings = []
-    for idx, s in enumerate(symbols):
-        if s.macro:
-            emb = model.encode(s.macro).astype("float32")
-            embeddings.append(emb)
-            symbol_index_map[s.id] = idx
-            index_data.append(emb)
+    symbol_index_map = {}
+    index_data = []
 
-    if embeddings:
-        index.reset()
-        index.add(np.array(embeddings).astype("float32"))
+    for symbol in symbols:
+        if not getattr(symbol, "macro", None):
+            continue
+        vector = _encode_for_storage(symbol.macro)
+        symbol_index_map[symbol.id] = len(index_data)
+        index_data.append(vector)
 
-def add_symbol(symbol: Symbol):
-    global index_data, symbol_index_map
+    _refresh_index()
 
-    if not symbol.macro:
+
+def add_symbol(symbol: Symbol) -> None:
+    """Add or update a single symbol in the embedding index."""
+
+    if not getattr(symbol, "macro", None):
         return
 
-    emb = model.encode(symbol.macro).astype("float32")
+    vector = _encode_for_storage(symbol.macro)
     sid = symbol.id
 
     if sid in symbol_index_map:
-        # Overwrite old vector
-        pos = symbol_index_map[sid]
-        index_data[pos] = emb
+        position = symbol_index_map[sid]
+        index_data[position] = vector
     else:
-        # New symbol
         symbol_index_map[sid] = len(index_data)
-        index_data.append(emb)
+        index_data.append(vector)
 
-    # Rebuild index
-    vectors = np.array(index_data).astype("float32")
-    index.reset()
-    index.add(vectors)
+    _refresh_index()
+
 
 def search(query: str, k: int = 5) -> List[Tuple[str, float]]:
-    if not index.is_trained or index.ntotal == 0:
+    """Search for the most relevant symbols given a text query."""
+
+    if not getattr(index, "is_trained", False) or getattr(index, "ntotal", 0) == 0:
         build_index()
 
-    query_emb = model.encode(query).astype("float32").reshape(1, -1)
-    distances, indices = index.search(query_emb, k)
+    query_vector = _encode_for_storage(query)
 
-    # Invert the index map
+    if _USE_FAISS:
+        assert np is not None
+        matrix = query_vector.reshape(1, -1)  # type: ignore[union-attr]
+    else:
+        matrix = [query_vector]
+
+    distances, indices = index.search(matrix, k)
+
     reverse_map = {v: k for k, v in symbol_index_map.items()}
+    results: List[Tuple[str, float]] = []
 
-    results = []
     for idx, dist in zip(indices[0], distances[0]):
         sid = reverse_map.get(idx)
-        if sid:
+        if sid is not None:
             results.append((sid, float(dist)))
 
     return results
-
