@@ -6,8 +6,8 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - MODEL_API_URL=${MODEL_API_URL}
-      - MODEL_NAME=${MODEL_NAME}
+      - MODEL_API_URL=${MODEL_API_URL:-http://ollama:11434/api/generate}
+      - MODEL_NAME=${MODEL_NAME:-llama3:8b-text-q5_K_M}
       - REDIS_HOST=redis
     depends_on:
       - redis
@@ -29,11 +29,11 @@ services:
     image: ollama/ollama
     restart: always
     ports:
-      - "${OLLAMA_PORT}:11434"
+      - "${OLLAMA_PORT:-11434}:11434"
     volumes:
       - ollama_data:/root/.ollama
     environment:
-      - OLLAMA_HOST=${OLLAMA_HOST}
+      - OLLAMA_HOST=${OLLAMA_HOST:-0.0.0.0}
     healthcheck:
       test: curl -f http://localhost:11434 || exit 1
       interval: 10s

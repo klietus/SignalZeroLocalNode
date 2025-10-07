@@ -34,12 +34,16 @@ class Settings:
             value = os.getenv(name)
             return value if value not in {None, ""} else None
 
+        def _value(name: str, default: str) -> str:
+            value = os.getenv(name)
+            return default if value in {None, ""} else value
+
         data = {
-            "model_provider": os.getenv("MODEL_PROVIDER", cls.model_provider),
-            "model_api_url": os.getenv("MODEL_API_URL", cls.model_api_url),
-            "model_name": os.getenv("MODEL_NAME", cls.model_name),
+            "model_provider": _value("MODEL_PROVIDER", cls.model_provider),
+            "model_api_url": _value("MODEL_API_URL", cls.model_api_url),
+            "model_name": _value("MODEL_NAME", cls.model_name),
             "openai_api_key": _optional("OPENAI_API_KEY"),
-            "openai_model": os.getenv("OPENAI_MODEL", cls.openai_model),
+            "openai_model": _value("OPENAI_MODEL", cls.openai_model),
             "openai_base_url": _optional("OPENAI_BASE_URL"),
         }
 

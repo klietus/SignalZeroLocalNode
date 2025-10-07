@@ -31,7 +31,7 @@ pip install -r requirements.txt
 
 ## ⚙️ Configuration
 
-SignalZero Local Node reads its runtime configuration from environment variables (a `.env` file is supported via `python-dotenv`). The following variables control how language model inference is performed:
+SignalZero Local Node reads its runtime configuration from environment variables (a `.env` file is supported via `python-dotenv`). A checked-in `.env.example` file captures the defaults used by `docker-compose`; copy it to `.env` to customize the stack locally. The following variables control how language model inference is performed:
 
 | Variable | Default | Description |
 | --- | --- | --- |
