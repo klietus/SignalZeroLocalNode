@@ -1,6 +1,6 @@
 # app/symbol_store.py
 
-from typing import Dict, List, Optional
+from typing import Dict, Iterable, List, Optional
 
 import json
 import os
@@ -174,4 +174,23 @@ def get_symbols(domain: Optional[str], tag: Optional[str], start: int, limit: in
 
 def get_domains() -> List[str]:
     return list(r.smembers("domains"))
+
+
+def get_symbols_by_ids(symbol_ids: Iterable[str]) -> List[Symbol]:
+    ids: List[str] = [symbol_id for symbol_id in symbol_ids if isinstance(symbol_id, str)]
+    if not ids:
+        return []
+
+    keys = [_key(symbol_id) for symbol_id in ids]
+    raw_values = r.mget(keys)
+
+    symbols: List[Symbol] = []
+    for symbol_id, raw in zip(ids, raw_values):
+        if not raw:
+            continue
+        try:
+            symbols.append(Symbol.model_validate_json(raw))
+        except Exception as exc:  # pragma: no cover - validation errors logged
+            print(f"[SymbolStore] Failed to decode symbol {symbol_id}: {exc}")
+    return symbols
 

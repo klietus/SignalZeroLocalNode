@@ -1,11 +1,15 @@
 
-from app.context_manager import ContextManager
 from pathlib import Path
+from typing import Dict, List
+
+from app.context_manager import ContextManager
 from app import embedding_index, chat_history
 from app.command_interpreter import CommandInterpreter
+from app.command_utils import integrate_command_results
 from app.symbol_store import get_symbol
 from app.model_call import model_call
 from app.chat_history import ChatHistory
+from app.types import Symbol
 
 
 def load_prompt_phase(phase_id: str, workflow: str = "user") -> str:
@@ -32,11 +36,13 @@ def run_query(user_query: str, session_id: str, k: int = 5) -> dict:
 
     nearest = embedding_index.search(user_query, k)
 
-    context_symbols = []
+    context_symbols: List[Symbol] = []
+    symbol_lookup: Dict[str, Symbol] = {}
     for sid, _ in nearest:
         symbol = get_symbol(sid)
         if symbol:
             context_symbols.append(symbol)
+            symbol_lookup[symbol.id] = symbol
 
     chat_turns = chat_history.get_history(session_id)
     chat_history.append_message(session_id, "user", user_query)
@@ -64,10 +70,16 @@ def run_query(user_query: str, session_id: str, k: int = 5) -> dict:
         reply_text = model_call(phase_prompt)
 
         # Execute any emitted commands
-        executed_commands.extend(interpreter.run(reply_text))
+        phase_commands = interpreter.run(reply_text)
+        executed_commands.extend(phase_commands)
 
         # Log output
         accumulated_history.append(("assistant", reply_text))
+        command_notes = integrate_command_results(
+            phase_commands, context_symbols, symbol_lookup
+        )
+        for note in command_notes:
+            accumulated_history.append(("system", f"[command] {note}"))
         final_reply = reply_text
 
     chat_history.append_message(session_id, "assistant", final_reply)
