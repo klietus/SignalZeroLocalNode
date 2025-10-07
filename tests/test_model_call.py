@@ -1,6 +1,3 @@
-from types import SimpleNamespace
-
-
 from app import model_call
 
 

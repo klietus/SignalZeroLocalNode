@@ -1,14 +1,15 @@
+"""Persistent storage helpers for chat session transcripts."""
+
+from __future__ import annotations
+
 import json
 from pathlib import Path
 from typing import List, Tuple
 
-import structlog
-
-from app.logging_config import configure_logging
+from app.logging_config import get_logger
 
 
-configure_logging()
-log = structlog.get_logger(__name__)
+log = get_logger(__name__)
 
 
 class ChatHistory:

@@ -1,18 +1,16 @@
 """FastAPI application definition and lifecycle hooks."""
 
+from __future__ import annotations
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import routes
 from app.embedding_index import build_index
-from app.logging_config import configure_logging
+from app.logging_config import get_logger
 from app.symbol_store import load_symbol_store_if_empty
 
-import structlog
-
-
-configure_logging()
-log = structlog.get_logger(__name__)
+log = get_logger(__name__)
 
 
 app = FastAPI(

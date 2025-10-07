@@ -1,5 +1,4 @@
 from collections import defaultdict
-from pathlib import Path
 
 from app import symbol_store
 from app.types import Symbol

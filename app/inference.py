@@ -5,7 +5,7 @@ from typing import Dict, List
 
 import structlog
 
-from app import chat_history, embedding_index
+from app import embedding_index
 from app.chat_history import ChatHistory
 from app.command_interpreter import CommandInterpreter
 from app.command_utils import integrate_command_results
