@@ -10,6 +10,7 @@ from app.symbol_store import load_symbol_store_if_empty
 
 log = get_logger(__name__)
 
+from app.encryption import initialize_encryption
 
 app = FastAPI(
     title="SignalZero Local Node",
@@ -40,6 +41,9 @@ def read_root() -> dict:
 async def startup_event() -> None:
     log.info("app.startup.begin")
     load_symbol_store_if_empty()
+    build_index()
+    initialize_encryption()
+
     log.info("app.startup.symbol_store_ready")
     build_index()
     log.info("app.startup.embedding_index_ready")

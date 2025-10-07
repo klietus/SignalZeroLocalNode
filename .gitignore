@@ -29,6 +29,10 @@ htmlcov/
 # Logs and runtime data
 chat_sessions/
 dump.rdb
-chat_sessions
-__pycache__/
-logs/
+*.log
+data/chat_encryption.key
+
+# Database snapshots
+*.sqlite
+*.sqlite3
+*.db
