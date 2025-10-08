@@ -7,32 +7,17 @@ import structlog
 
 from app.logging_config import configure_logging
 
+import tiktoken
 
 configure_logging()
 log = structlog.get_logger(__name__)
 
-try:  # pragma: no cover - optional dependency
-    import tiktoken
-except Exception:  # pragma: no cover - optional dependency
-    tiktoken = None  # type: ignore
-
-
-class _SimpleEncoder:
-    def encode(self, text: str) -> List[int]:
-        return [len(token) for token in text.split()]
-
-
 def _get_encoder():
-    if tiktoken is None:
-        return _SimpleEncoder()
-    try:
-        return tiktoken.get_encoding("cl100k_base")
-    except Exception:  # pragma: no cover - network resilience
-        return _SimpleEncoder()
+    return tiktoken.get_encoding("cl100k_base")
 
 
 class ContextManager:
-    def __init__(self, max_tokens=8192, system_reserved=1000):
+    def __init__(self, max_tokens=4096, system_reserved=1000):
         self.max_tokens = max_tokens
         self.system_reserved = system_reserved
         self.encoder = _get_encoder()
@@ -134,7 +119,7 @@ class ContextManager:
         if self.symbols:
             weights["symbols"] = 0.5
         if self.history:
-            weights["history"] = 0.5
+            weights["history"] = 0.3
 
         total_weight = sum(weights.values())
         budgets = {"agents": 0, "symbols": 0, "history": 0}
@@ -173,6 +158,11 @@ class ContextManager:
         symbol_block = self.pack_symbols(symbol_token_budget)
         history_block = self.pack_history(history_token_budget)
 
+        log.debug("context_manager.system_block.tokens", tokens=len(self.encoder.encode(system_block)))
+        log.debug("context_manager.agent_block.tokens", tokens=len(self.encoder.encode(agent_block)))
+        log.debug("context_manager.symbol_block.tokens", tokens=len(self.encoder.encode(symbol_block)))
+        log.debug("context_manager.history_block.tokens", tokens=len(self.encoder.encode(history_block)))
+
         # Assemble final prompt
         sections = [
             system_block,
@@ -182,7 +172,7 @@ class ContextManager:
             symbol_block,
             "CHAT_HISTORY:",
             history_block,
-            f"USER: {user_prompt}"
+            f"CURRENT_QUERY: {user_prompt}"
         ]
 
         # Log diagnostic information
@@ -192,6 +182,7 @@ class ContextManager:
             agent_characters=len(agent_block),
             symbol_characters=len(symbol_block),
             history_characters=len(history_block),
+            total_characters=len(system_block) + len(agent_block) + len(symbol_block) + len(history_block)
         )
 
         prompt = "\n\n".join(sections)
