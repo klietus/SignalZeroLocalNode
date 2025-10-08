@@ -100,25 +100,35 @@ class ContextManager:
         return "\n".join(packed)
 
     def build_prompt(self, user_prompt):
-        prompt_parts = []
-        for sp in self.system_prompts:
-            prompt_parts.append(f"SYSTEM: {sp}")
-        available = self.max_tokens - self.system_reserved - len(self.encoder.encode(user_prompt))
-        symbol_tokens = int(available * 0.5)
-        history_tokens = available - symbol_tokens
+        # Encode user prompt and calculate token budget
+        user_tokens = len(self.encoder.encode(user_prompt))
+        available_tokens = self.max_tokens - self.system_reserved - user_tokens
+        symbol_token_budget = int(available_tokens * 0.5)
+        history_token_budget = available_tokens - symbol_token_budget
 
-        sym = self.pack_symbols(symbol_tokens)
-        hist = self.pack_history(history_tokens)
+        # Construct system block
+        system_block = "\n".join(f"SYSTEM: {sp}" for sp in self.system_prompts)
 
-        prompt_parts.append("SYMBOLS:")
-        prompt_parts.append(sym)
-        prompt_parts.append("CHAT_HISTORY:")
-        prompt_parts.append(hist)
-        prompt_parts.append(f"USER: {user_prompt}")
+        # Construct content blocks
+        symbol_block = self.pack_symbols(symbol_token_budget)
+        history_block = self.pack_history(history_token_budget)
+
+        # Assemble final prompt
+        sections = [
+            system_block,
+            "SYMBOLS:",
+            symbol_block,
+            "CHAT_HISTORY:",
+            history_block,
+            f"USER: {user_prompt}"
+        ]
+
+        # Log diagnostic information
         log.debug(
             "context_manager.prompt_built",
             system_prompts=len(self.system_prompts),
-            symbol_characters=len(sym),
-            history_characters=len(hist),
+            symbol_characters=len(symbol_block),
+            history_characters=len(history_block),
         )
-        return "\n\n".join(prompt_parts)
+
+        return "\n\n".join(sections)
