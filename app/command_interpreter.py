@@ -18,7 +18,7 @@ log = structlog.get_logger(__name__)
 class CommandInterpreter:
     """Parse ⟐CMD blocks and dispatch supported actions."""
 
-    _TOKEN = "⟐CMD"
+    _COMMAND_MARKER = "⟐CMD"
 
     def __init__(self) -> None:
         self._handlers: Dict[str, Callable[[Dict[str, Any]], Any]] = {
@@ -49,7 +49,7 @@ class CommandInterpreter:
         search_start = 0
 
         while True:
-            token_index = text.find(self._TOKEN, search_start)
+            token_index = text.find(self._COMMAND_MARKER, search_start)
             if token_index == -1:
                 break
 

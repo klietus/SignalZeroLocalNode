@@ -1,10 +1,10 @@
 """Symbol embedding index utilities with optional lightweight backend."""
 from __future__ import annotations
 
+import hashlib
 import math
 import os
-import random
-from typing import Dict, Iterable, List, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
 import structlog
 
@@ -38,9 +38,11 @@ class _SimpleEncoder:
         self.dimension = dimension
 
     def encode(self, text: str) -> List[float]:
-        rng = random.Random()
-        rng.seed(text)
-        vector = [rng.random() for _ in range(self.dimension)]
+        vector: List[float] = []
+        for index in range(self.dimension):
+            digest = hashlib.sha256(f"{text}:{index}".encode("utf-8")).digest()
+            value = int.from_bytes(digest[:8], "big") / 2**64
+            vector.append(value)
         log.debug("embedding_index.simple_encoder", dimension=self.dimension)
         return vector
 
@@ -144,13 +146,21 @@ symbol_index_map: Dict[str, int] = {}
 index_data: List[Iterable[float]] = []
 
 
+def _require_numpy() -> Any:
+    if np is None:
+        raise RuntimeError("NumPy is required when using the FAISS backend.")
+    return np
+
+
 def _encode_for_storage(text: str):
     vector = model.encode(text)
     if _USE_FAISS:
-        assert np is not None  # for type checkers
-        if not isinstance(vector, np.ndarray):
-            vector = np.asarray(vector, dtype="float32")
-        return vector.astype("float32")
+        backend_np = _require_numpy()
+        if isinstance(vector, backend_np.ndarray):
+            vector_array = vector
+        else:
+            vector_array = backend_np.asarray(vector, dtype="float32")
+        return vector_array.astype("float32")
     return [float(v) for v in vector]
 
 
@@ -160,8 +170,8 @@ def _refresh_index() -> None:
         log.info("embedding_index.refresh_skipped")
         return
     if _USE_FAISS:
-        assert np is not None
-        stacked = np.stack(list(index_data)).astype("float32")
+        backend_np = _require_numpy()
+        stacked = backend_np.stack(list(index_data)).astype("float32")
         index.add(stacked)
     else:
         index.add(index_data)  # type: ignore[arg-type]
@@ -223,8 +233,8 @@ def search(query: str, k: int = 5) -> List[Tuple[str, float]]:
     query_vector = _encode_for_storage(query)
 
     if _USE_FAISS:
-        assert np is not None
-        matrix = query_vector.reshape(1, -1)  # type: ignore[union-attr]
+        backend_np = _require_numpy()
+        matrix = backend_np.asarray(query_vector, dtype="float32").reshape(1, -1)
     else:
         matrix = [query_vector]
 

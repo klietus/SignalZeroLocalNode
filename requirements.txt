@@ -10,3 +10,5 @@ tiktoken
 openai
 pytest
 structlog
+ruff
+bandit

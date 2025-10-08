@@ -65,6 +65,10 @@ class ContextManager:
     def pack_symbols(self, token_budget):
         sorted_syms = sorted(self.symbols, key=lambda x: -getattr(x, "relevance", 0.0))
 
+        print(f"token_budget: {token_budget}")
+        print(f"sorted_syms: {sorted_syms}")
+        print(f"self.symbols: {self.symbols}")
+        
         packed = []
         tokens_used = 0
 

@@ -18,9 +18,9 @@ def test_pack_symbols_respects_budget():
     ctx.add_symbol(sym1, relevance=0.9)
     ctx.add_symbol(sym2, relevance=0.1)
 
-    packed = ctx.pack_symbols(10)
+    packed = ctx.pack_symbols(12)
     assert "s1" in packed
-
+    assert "s2" not in packed
 
 def test_pack_history_includes_latest():
     ctx = ContextManager(max_tokens=200, system_reserved=0)
