@@ -61,10 +61,12 @@ def run_query(user_query: str, session_id: str, k: int = 5) -> dict:
     log.debug("inference.similarity_results", results=len(nearest))
 
     default_agents = _load_default_agents()
+    log.debug("inference.default_agents", default_agents=default_agents)
     context_agents: List[AgentPersona] = list(default_agents)
     agent_lookup: Dict[str, AgentPersona] = {agent.id: agent for agent in default_agents}
 
     default_symbols = _load_default_symbols()
+    log.debug("inference.default_symbols", default_symbols=default_symbols)
     context_symbols: List[Symbol] = []
     symbol_lookup: Dict[str, Symbol] = {symbol.id: symbol for symbol in default_symbols}
     for sid, _ in nearest:

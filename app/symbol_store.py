@@ -35,9 +35,9 @@ SYMBOL_KEY_PREFIX = "symbol:"
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.getenv("DATA_DIR", BASE_DIR / "data"))
-DEFAULT_SYMBOL_CATALOG = DATA_DIR / "symbol_catalog.min.json"
+DEFAULT_SYMBOL_CATALOG = DATA_DIR / "symbol_catalog.json"
 DEFAULT_AGENTS_PATH = DATA_DIR / "agents.json"
-DEFAULT_KITS_PATH = DATA_DIR / "kits.min.json"
+DEFAULT_KITS_PATH = DATA_DIR / "kits.json"
 
 
 def _key(symbol_id: str) -> str:
@@ -175,6 +175,7 @@ def load_symbol_store_if_empty(path: Optional[Union[str, Path]] = None):
 
     log.info("symbol_store.initialise_if_empty", path=str(file_path))
 
+
     existing_ids = _existing_symbol_ids()
     if existing_ids:
         log.info(
@@ -184,9 +185,12 @@ def load_symbol_store_if_empty(path: Optional[Union[str, Path]] = None):
     with open(file_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
+    if "symbols" not in data or not isinstance(data["symbols"], list):
+        raise ValueError("Invalid symbol catalog format: missing 'symbols' key or malformed array.")
+
     loaded = 0
     skipped = 0
-    for s in data:
+    for s in data["symbols"]:
         try:
             symbol = Symbol(**s)
             if symbol.id in existing_ids:
