@@ -1,7 +1,7 @@
 import pytest
 
 from app import inference, command_utils
-from app.types import Symbol
+from app.types import AgentPersona, Symbol
 
 
 def test_load_prompt_phase_missing(tmp_path):
@@ -17,6 +17,7 @@ def test_run_query(monkeypatch):
             self.prompts = []
             self.history = []
             self.symbols = []
+            self.agents = []
             DummyContextManager.instances.append(self)
 
         def add_system_prompt(self, prompt):
@@ -25,11 +26,16 @@ def test_run_query(monkeypatch):
         def add_history(self, role, content):
             self.history.append((role, content))
 
-        def add_symbol(self, symbol):
+        def add_symbol(self, symbol, relevance=1.0):  # noqa: ARG002 - test helper signature
             self.symbols.append(symbol)
 
+        def add_agent(self, agent):
+            self.agents.append(agent)
+
         def build_prompt(self, user_prompt):
-            return f"prompt::{user_prompt}::{len(self.symbols)}"
+            return (
+                f"prompt::{user_prompt}::symbols:{len(self.symbols)}::agents:{len(self.agents)}"
+            )
 
     class DummyChatHistory:
         def __init__(self):
@@ -68,9 +74,12 @@ def test_run_query(monkeypatch):
     symbols = {
         "s1": Symbol(id="s1", macro="macro"),
         "s2": Symbol(id="s2", macro="macro"),
+        "SZ:STB-Signal-Anchor-006": Symbol(id="SZ:STB-Signal-Anchor-006", macro="macro"),
     }
     monkeypatch.setattr(inference, "get_symbol", lambda sid: symbols.get(sid))
     monkeypatch.setattr(command_utils, "get_symbol", lambda sid: symbols.get(sid))
+    agents = {"SZ-P001": AgentPersona(id="SZ-P001", name="Recursive Heart Anchor")}
+    monkeypatch.setattr(inference, "get_agent", lambda aid: agents.get(aid))
     monkeypatch.setattr(inference, "model_call", lambda prompt: f"response for {prompt}")
     monkeypatch.setattr(inference, "load_prompt_phase", lambda phase_id, workflow="user": f"{workflow}:{phase_id}")
     monkeypatch.setattr(inference, "WORKFLOW_PHASES", [("phase1", "user"), ("phase2", "user")], raising=False)
@@ -79,14 +88,15 @@ def test_run_query(monkeypatch):
     result = inference.run_query("what?", "session-1", k=1)
 
     assert result["reply"].startswith("response for")
-    assert result["symbols_used"] == ["s1", "s2"]
+    assert result["symbols_used"] == ["SZ:STB-Signal-Anchor-006", "s1", "s2"]
     assert result["history_length"] == 3
     assert len(result["commands"]) == 1
     assert interpreter.inputs == [
-        "response for prompt::what?::1",
-        "response for prompt::what?::2",
+        "response for prompt::what?::symbols:2::agents:1",
+        "response for prompt::what?::symbols:3::agents:1",
     ]
 
     first_ctx, second_ctx = inference.ContextManager.instances[:2]
-    assert len(first_ctx.symbols) == 1
-    assert len(second_ctx.symbols) == 2
+    assert len(first_ctx.symbols) == 2
+    assert len(second_ctx.symbols) == 3
+    assert len(first_ctx.agents) == 1

@@ -35,11 +35,14 @@ def test_pack_history_includes_latest():
 def test_build_prompt_structure():
     ctx = ContextManager(max_tokens=200, system_reserved=10)
     ctx.add_system_prompt("system message")
+    ctx.add_agent(type("Agent", (), {"id": "a-1", "name": "Agent One"})())
     ctx.add_symbol(DummySymbol("s1", "Name", macro="macro"))
     ctx.add_history("user", "hello")
 
     prompt = ctx.build_prompt("do work")
     assert "SYSTEM: system message" in prompt
+    assert "AGENTS:" in prompt
+    assert "a-1" in prompt
     assert "SYMBOLS:" in prompt
     assert "CHAT_HISTORY:" in prompt
     assert "USER: do work" in prompt

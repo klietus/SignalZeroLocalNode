@@ -37,6 +37,7 @@ class ContextManager:
         self.system_reserved = system_reserved
         self.encoder = _get_encoder()
         self.symbols = []  # list of dicts with keys: id, triad, description, relevance
+        self.agents = []  # list of agent personas to include in context
         self.history = []  # list of (role, content) tuples
         self.system_prompts = []  # ordered system prompts
         log.debug(
@@ -57,6 +58,10 @@ class ContextManager:
         setattr(symbol, "relevance", relevance)
         self.symbols.append(symbol)
         log.debug("context_manager.symbol_added", symbol_id=getattr(symbol, "id", None))
+
+    def add_agent(self, agent):
+        self.agents.append(agent)
+        log.debug("context_manager.agent_added", agent_id=getattr(agent, "id", None))
 
     def add_history(self, role, content):
         self.history.append((role, content))
@@ -85,6 +90,16 @@ class ContextManager:
 
         return "\n".join(packed)
 
+    def pack_agents(self):
+        lines = []
+        for agent in self.agents:
+            agent_id = getattr(agent, "id", None)
+            if not agent_id:
+                continue
+            name = getattr(agent, "name", "")
+            lines.append(" | ".join(filter(None, [agent_id, name])))
+        return "\n".join(lines)
+
     def pack_history(self, token_budget):
         packed = []
         tokens_used = 0
@@ -110,12 +125,15 @@ class ContextManager:
         system_block = "\n".join(f"SYSTEM: {sp}" for sp in self.system_prompts)
 
         # Construct content blocks
+        agent_block = self.pack_agents()
         symbol_block = self.pack_symbols(symbol_token_budget)
         history_block = self.pack_history(history_token_budget)
 
         # Assemble final prompt
         sections = [
             system_block,
+            "AGENTS:",
+            agent_block,
             "SYMBOLS:",
             symbol_block,
             "CHAT_HISTORY:",
