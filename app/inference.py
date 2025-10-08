@@ -153,9 +153,9 @@ def run_query(user_query: str, session_id: str, k: int = 5) -> dict:
         for note in command_notes:
             accumulated_history.append(("system", f"[command] {note}"))
         final_reply = reply_text
-        chat_history.append_message(session_id, "user", user_query)
-        chat_history.append_message(session_id, "assistant", final_reply)
+
         log.info("inference.history_appended", session_id=session_id, turns=len(chat_turns))
+
 
     log.info(
         "inference.run_query.completed",
@@ -163,7 +163,8 @@ def run_query(user_query: str, session_id: str, k: int = 5) -> dict:
         commands=len(executed_commands),
         symbols=len(context_symbols),
     )
-
+    
+    chat_history.append_message(session_id, "query", user_query)
     chat_history.append_message(session_id, "assistant", final_reply)
 
     all_symbol_ids = [symbol.id for symbol in default_symbols]

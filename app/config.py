@@ -17,14 +17,14 @@ class Settings:
 
     model_provider: Literal["local", "openai"] = "local"
     model_api_url: str = "http://localhost:11434/api/generate"
-    model_name: str = "llama3:8b-text-q5_K_M"
+    model_name: str = "deepseek-r1:8b"
     model_num_predict: int = 48
 
     openai_api_key: Optional[str] = None
     openai_model: str = "gpt-4o-mini"
     openai_base_url: Optional[str] = None
     openai_temperature: float = 0.0
-    openai_max_output_tokens: int = 256
+    openai_max_output_tokens: int = 1028
 
     @classmethod
     def from_env(cls) -> "Settings":
