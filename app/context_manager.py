@@ -70,10 +70,6 @@ class ContextManager:
     def pack_symbols(self, token_budget):
         sorted_syms = sorted(self.symbols, key=lambda x: -getattr(x, "relevance", 0.0))
 
-        print(f"token_budget: {token_budget}")
-        print(f"sorted_syms: {sorted_syms}")
-        print(f"self.symbols: {self.symbols}")
-        
         packed = []
         tokens_used = 0
 
@@ -90,15 +86,23 @@ class ContextManager:
 
         return "\n".join(packed)
 
-    def pack_agents(self):
-        lines = []
+    def pack_agents(self, token_budget):
+        packed = []
+        tokens_used = 0
+
         for agent in self.agents:
             agent_id = getattr(agent, "id", None)
             if not agent_id:
                 continue
             name = getattr(agent, "name", "")
-            lines.append(" | ".join(filter(None, [agent_id, name])))
-        return "\n".join(lines)
+            line = " | ".join(filter(None, [agent_id, name]))
+            t = len(self.encoder.encode(line))
+            if tokens_used + t > token_budget:
+                break
+            packed.append(line)
+            tokens_used += t
+
+        return "\n".join(packed)
 
     def pack_history(self, token_budget):
         packed = []
@@ -118,14 +122,48 @@ class ContextManager:
         # Encode user prompt and calculate token budget
         user_tokens = len(self.encoder.encode(user_prompt))
         available_tokens = self.max_tokens - self.system_reserved - user_tokens
-        symbol_token_budget = int(available_tokens * 0.5)
-        history_token_budget = available_tokens - symbol_token_budget
+
+        # Determine budgeting weights for each section
+        weights = {}
+        if self.agents:
+            weights["agents"] = 0.2
+        if self.symbols:
+            weights["symbols"] = 0.5
+        if self.history:
+            weights["history"] = 0.5
+
+        total_weight = sum(weights.values())
+        budgets = {"agents": 0, "symbols": 0, "history": 0}
+        if available_tokens > 0 and total_weight > 0:
+            # Normalise weights so they sum to 1
+            normalised = {
+                key: weight / total_weight for key, weight in weights.items()
+            }
+
+            allocated = 0
+            for key, weight in normalised.items():
+                token_budget = int(available_tokens * weight)
+                budgets[key] = token_budget
+                allocated += token_budget
+
+            # Distribute any rounding remainder
+            remainder = available_tokens - allocated
+            for key in ("agents", "symbols", "history"):
+                if remainder <= 0:
+                    break
+                if key in normalised:
+                    budgets[key] += 1
+                    remainder -= 1
+
+        agent_token_budget = budgets["agents"]
+        symbol_token_budget = budgets["symbols"]
+        history_token_budget = budgets["history"]
 
         # Construct system block
         system_block = "\n".join(f"SYSTEM: {sp}" for sp in self.system_prompts)
 
         # Construct content blocks
-        agent_block = self.pack_agents()
+        agent_block = self.pack_agents(agent_token_budget)
         symbol_block = self.pack_symbols(symbol_token_budget)
         history_block = self.pack_history(history_token_budget)
 
@@ -145,6 +183,7 @@ class ContextManager:
         log.debug(
             "context_manager.prompt_built",
             system_prompts=len(self.system_prompts),
+            agent_characters=len(agent_block),
             symbol_characters=len(symbol_block),
             history_characters=len(history_block),
         )
