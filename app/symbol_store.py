@@ -184,12 +184,9 @@ def load_symbol_store_if_empty(path: Optional[Union[str, Path]] = None):
     with open(file_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    if "symbols" not in data or not isinstance(data["symbols"], list):
-        raise ValueError("Invalid symbol catalog format: missing 'symbols' key or malformed array.")
-
     loaded = 0
     skipped = 0
-    for s in data["symbols"]:
+    for s in data:
         try:
             symbol = Symbol(**s)
             if symbol.id in existing_ids:
