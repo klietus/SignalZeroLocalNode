@@ -50,7 +50,12 @@ class FakeRedis:
 def test_load_symbol_store(monkeypatch, tmp_path):
     fake = FakeRedis()
     monkeypatch.setattr(symbol_store, "r", fake)
-    monkeypatch.setattr(symbol_store.embedding_index, "add_symbol", lambda symbol: None)
+    recorded = []
+    monkeypatch.setattr(
+        symbol_store.embedding_index,
+        "add_symbol",
+        lambda symbol: recorded.append(symbol.id),
+    )
 
     catalog = {
         "symbols": [
@@ -67,12 +72,19 @@ def test_load_symbol_store(monkeypatch, tmp_path):
     symbol_store.load_symbol_store_if_empty(path=str(path))
     stored = symbol_store.get_symbol("s1")
     assert stored.id == "s1"
+    assert recorded == ["s1"]
+    assert set(symbol_store.get_domains()) == {"domain"}
 
 
 def test_load_symbol_store_merges_existing_data(monkeypatch, tmp_path):
     fake = FakeRedis()
     monkeypatch.setattr(symbol_store, "r", fake)
-    monkeypatch.setattr(symbol_store.embedding_index, "add_symbol", lambda symbol: None)
+    recorded = []
+    monkeypatch.setattr(
+        symbol_store.embedding_index,
+        "add_symbol",
+        lambda symbol: recorded.append(symbol.id),
+    )
     calls = {"agents": 0, "kits": 0}
 
     def _load_agents(path="data/agents.json"):
@@ -117,6 +129,8 @@ def test_load_symbol_store_merges_existing_data(monkeypatch, tmp_path):
     assert stored_existing.macro == "original"
     assert stored_new is not None
     assert stored_new.id == "new"
+    assert recorded == ["new"]
+    assert set(symbol_store.get_domains()) == {"domain"}
     assert calls == {"agents": 1, "kits": 1}
 
 

@@ -34,6 +34,19 @@ agents_index: Dict[str, AgentPersona] = {}
 SYMBOL_KEY_PREFIX = "symbol:"
 
 
+def _key(symbol_id: str) -> str:
+    return f"{SYMBOL_KEY_PREFIX}{symbol_id}"
+
+
+def _persist_symbol(symbol: Symbol) -> None:
+    """Store a symbol in Redis and update auxiliary indexes."""
+
+    r.set(_key(symbol.id), symbol.model_dump_json())
+    embedding_index.add_symbol(symbol)
+    if symbol.symbol_domain:
+        r.sadd("domains", symbol.symbol_domain)
+
+
 def load_agents(path: str = "data/agents.json") -> int:
     agents_index.clear()
     file_path = Path(path)
@@ -168,7 +181,8 @@ def load_symbol_store_if_empty(path: str = "data/symbol_catalog.min.json"):
             if symbol.id in existing_ids:
                 skipped += 1
                 continue
-            r.set(f"{SYMBOL_KEY_PREFIX}{symbol.id}", symbol.model_dump_json())
+            _persist_symbol(symbol)
+            existing_ids.add(symbol.id)
             loaded += 1
         except Exception as e:
             log.error(
@@ -180,10 +194,6 @@ def load_symbol_store_if_empty(path: str = "data/symbol_catalog.min.json"):
     log.info("symbol_store.symbols_loaded", count=loaded, skipped=skipped)
     load_agents()
     load_kits()
-
-def _key(symbol_id: str) -> str:
-    return f"{SYMBOL_KEY_PREFIX}{symbol_id}"
-
 
 def get_symbol(symbol_id: str) -> Optional[Symbol]:
     raw = r.get(_key(symbol_id))
@@ -231,7 +241,7 @@ def put_symbols_bulk(symbols: List[Symbol]) -> str:
 
 
 def get_symbols(domain: Optional[str], tag: Optional[str], start: int, limit: int) -> List[Symbol]:
-    keys = r.keys("symbol:*")
+    keys = r.keys(f"{SYMBOL_KEY_PREFIX}*")
     raw_values = r.mget(keys)
 
     results = []
