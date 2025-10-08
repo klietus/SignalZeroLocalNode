@@ -10,9 +10,11 @@ from app.embedding_index import build_index
 from app.logging_config import get_logger
 from app.symbol_store import load_symbol_store_if_empty
 
+from app.encryption import initialize_encryption
+
 log = get_logger(__name__)
 
-from app.encryption import initialize_encryption
+
 
 app = FastAPI(
     title="SignalZero Local Node",
