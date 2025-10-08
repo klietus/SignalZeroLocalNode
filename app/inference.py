@@ -108,6 +108,13 @@ def run_query(user_query: str, session_id: str, k: int = 5) -> dict:
         reply_text = model_call(phase_prompt)
         log.debug("inference.phase_reply", reply_text=reply_text)
         log.info(
+            "inference.phase_intermediate",
+            phase_id=phase_id,
+            workflow=workflow,
+            session_id=session_id,
+            response=reply_text,
+        )
+        log.info(
             "inference.phase_completed",
             phase_id=phase_id,
             session_id=session_id,
