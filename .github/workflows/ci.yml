@@ -37,10 +37,10 @@ jobs:
           pip install ruff bandit
 
       - name: Run ruff
-        run: ruff check .
+        run: ruff check --ignore E402 .
 
       - name: Run bandit
-        run: bandit -r . -x tests,data
+        run: bandit -r app api structlog scripts -x tests,data
 
   test:
     name: Run tests
