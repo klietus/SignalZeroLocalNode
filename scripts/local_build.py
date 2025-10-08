@@ -5,27 +5,48 @@ from __future__ import annotations
 import argparse
 import importlib
 import os
-import subprocess
+import shlex
 import sys
 from pathlib import Path
+from tempfile import TemporaryDirectory
+# Bandit: subprocess usage restricted to curated commands.
+from subprocess import CalledProcessError, run  # nosec B404
+from typing import Sequence
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_ENV = os.environ.copy()
 DEFAULT_ENV.setdefault("EMBEDDING_INDEX_BACKEND", "memory")
+SAFE_MODULES = {"ruff", "bandit", "compileall", "pytest"}
 
 
 class MissingDependencyError(RuntimeError):
     """Raised when a required command dependency is unavailable."""
 
 
+def _validate_command(command: Sequence[str]) -> None:
+    if not command:
+        raise ValueError("Command list must contain at least one entry.")
+    binary = Path(command[0])
+    if binary != Path(sys.executable):
+        raise ValueError(f"Unsupported executable: {binary}")
+    if len(command) < 3 or command[1] != "-m":
+        raise ValueError("Commands must invoke a Python module via '-m'.")
+    module_name = command[2]
+    if module_name not in SAFE_MODULES:
+        raise ValueError(f"Module '{module_name}' is not in the approved allowlist.")
+
+
 def run_step(step_name: str, command: list[str], *, env: dict[str, str] | None = None) -> None:
     """Execute a command and stream its output."""
-    display_cmd = " ".join(command)
+    _validate_command(command)
+    display_cmd = shlex.join(command)
     print(f"\n==> {step_name}: {display_cmd}")
-    completed = subprocess.run(command, cwd=PROJECT_ROOT, env=env or DEFAULT_ENV, check=False)
-    if completed.returncode != 0:
-        raise SystemExit(completed.returncode)
+    try:
+        # Bandit: command arguments are validated in _validate_command.
+        run(command, cwd=PROJECT_ROOT, env=env or DEFAULT_ENV, check=True, shell=False)  # nosec B603
+    except CalledProcessError as exc:
+        raise SystemExit(exc.returncode) from exc
 
 
 def ensure_module(module_name: str, *, install_hint: str) -> None:
@@ -82,7 +103,14 @@ def lint() -> None:
         ],
     )
 
-    run_step("python compileall", [sys.executable, "-m", "compileall", "."])
+    with TemporaryDirectory(prefix="local_build_pycache_") as cache_dir:
+        compile_env = DEFAULT_ENV.copy()
+        compile_env["PYTHONPYCACHEPREFIX"] = cache_dir
+        run_step(
+            "python compileall",
+            [sys.executable, "-m", "compileall", "app", "api", "scripts", "structlog"],
+            env=compile_env,
+        )
 
 
 def test(pytest_args: list[str] | None) -> None:

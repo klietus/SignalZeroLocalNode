@@ -4,7 +4,7 @@
 
 ---
 
-## 🔧 Features (planned)
+## 🔧 Features
 
 - ⚙️ FastAPI web server (stubbed for local or cloud)
 - 🗃️ Embedded or remote Symbol Store (SQLite / DynamoDB)
