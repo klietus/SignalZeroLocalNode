@@ -77,7 +77,8 @@ class ContextManager:
             triad = s.triad or []
             macro = s.macro or ""
             linked_patterns = " | ".join(s.linked_patterns or [])
-            line = f"{s.id} | {s.name} |{' '.join(triad)} | {macro} | {s.description} | {linked_patterns}"
+            invocations = " | ".join(s.invocations or [])
+            line = f"{s.id} | {s.name} |{' '.join(triad)} | {macro} | {invocations} | {linked_patterns}"
             t = len(self.encoder.encode(line))
             if tokens_used + t > token_budget:
                 break
@@ -194,6 +195,4 @@ class ContextManager:
         )
 
         prompt = "\n\n".join(sections)
-        log.debug("context_manager.prompt_built", prompt=prompt)
-
         return prompt

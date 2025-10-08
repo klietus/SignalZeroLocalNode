@@ -11,7 +11,7 @@ def test_load_prompt_missing(tmp_path):
 def test_build_context(monkeypatch):
     monkeypatch.setattr(agency_loop, "SHARED_PROMPTS", ["shared-a", "shared-b"])
 
-    symbol = type("Symbol", (), {"id": "s1", "name": "Name", "triad": ["a"], "description": "desc", "macro": "macro", "linked_patterns": ["p1", "p2"]})()
+    symbol = type("Symbol", (), {"id": "s1", "name": "Name", "triad": ["a"], "description": "desc", "macro": "macro", "linked_patterns": ["p1", "p2"], "invocations": ["i1", "i2"]})()
     ctx = agency_loop._build_context(
         base_history=[("user", "hi")],
         interim_history=[("assistant", "hello")],
