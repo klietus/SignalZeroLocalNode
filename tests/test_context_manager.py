@@ -2,14 +2,14 @@ from app.context_manager import ContextManager
 
 
 class DummySymbol:
-    def __init__(self, sid: str, name: str, triad=None, macro="", linked_patterns=None):
+    def __init__(self, sid: str, name: str, triad=None, macro="", linked_patterns=None, invocations=None):
         self.id = sid
         self.name = name
         self.triad = triad or ["t1", "t2"]
         self.description = "desc"
         self.macro = macro
         self.linked_patterns = linked_patterns or []
-
+        self.invocations = invocations or []
 
 class DummyAgent:
     def __init__(self, aid: str, name: str, triad=None, activation_conditions=None):
@@ -21,8 +21,8 @@ class DummyAgent:
 
 def test_pack_symbols_respects_budget():
     ctx = ContextManager(max_tokens=200, system_reserved=0)
-    sym1 = DummySymbol("s1", "First", macro="macro one", linked_patterns=["p1", "p2"])
-    sym2 = DummySymbol("s2", "Second", macro="macro two", linked_patterns=["p3", "p4"])
+    sym1 = DummySymbol("s1", "First", macro="macro one", linked_patterns=["p1", "p2"], invocations=["i1", "i2"])
+    sym2 = DummySymbol("s2", "Second", macro="macro two", linked_patterns=["p3", "p4"], invocations=["i3", "i4"])
 
     ctx.add_symbol(sym1, relevance=0.9)
     ctx.add_symbol(sym2, relevance=0.1)

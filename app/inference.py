@@ -77,8 +77,6 @@ def run_query(user_query: str, session_id: str, k: int = 5) -> dict:
             log.debug("inference.symbol_context_added", symbol_id=symbol.id)
 
     chat_turns = chat_history.get_history(session_id)
-    chat_history.append_message(session_id, "user", user_query)
-    log.info("inference.history_appended", session_id=session_id, turns=len(chat_turns))
 
     final_reply = None
     accumulated_history = []
@@ -106,7 +104,9 @@ def run_query(user_query: str, session_id: str, k: int = 5) -> dict:
             ctx.add_symbol(s)
 
         phase_prompt = ctx.build_prompt(user_query)
+        log.debug("inference.phase_prompt", phase_prompt=phase_prompt)
         reply_text = model_call(phase_prompt)
+        log.debug("inference.phase_reply", reply_text=reply_text)
         log.info(
             "inference.phase_completed",
             phase_id=phase_id,
@@ -153,6 +153,9 @@ def run_query(user_query: str, session_id: str, k: int = 5) -> dict:
         for note in command_notes:
             accumulated_history.append(("system", f"[command] {note}"))
         final_reply = reply_text
+        chat_history.append_message(session_id, "user", user_query)
+        chat_history.append_message(session_id, "assistant", final_reply)
+        log.info("inference.history_appended", session_id=session_id, turns=len(chat_turns))
 
     log.info(
         "inference.run_query.completed",
