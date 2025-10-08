@@ -57,12 +57,12 @@ def _build_logging_config(log_file: Path) -> Dict[str, Any]:
             "console": {
                 "class": "logging.StreamHandler",
                 "formatter": "structlog",
-                "level": "INFO",
+                "level": "DEBUG",
             },
             "file": {
                 "class": "logging.handlers.TimedRotatingFileHandler",
                 "formatter": "structlog",
-                "level": "INFO",
+                "level": "DEBUG",
                 "filename": str(log_file),
                 "when": "H",
                 "interval": 1,
@@ -73,7 +73,7 @@ def _build_logging_config(log_file: Path) -> Dict[str, Any]:
         },
         "root": {
             "handlers": ["console", "file"],
-            "level": "INFO",
+            "level": "DEBUG",
         },
     }
 

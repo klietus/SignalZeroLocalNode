@@ -57,13 +57,14 @@ def test_load_symbol_store(monkeypatch, tmp_path):
         lambda symbol: recorded.append(symbol.id),
     )
 
-    catalog = [
+    catalog = {"symbols": [
             {
                 "id": "s1",
                 "macro": "macro",
                 "symbol_domain": "domain",
             }
-        ]
+        ]}
+
     path = tmp_path / "symbols.json"
     path.write_text(symbol_store.json.dumps(catalog))
 
@@ -99,7 +100,7 @@ def test_load_symbol_store_merges_existing_data(monkeypatch, tmp_path):
     existing = Symbol(id="existing", macro="original", symbol_domain="domain")
     fake.set(f"symbol:{existing.id}", existing.model_dump_json())
 
-    catalog = [
+    catalog = {"symbols": [
             {
                 "id": "existing",
                 "macro": "updated",
@@ -110,7 +111,8 @@ def test_load_symbol_store_merges_existing_data(monkeypatch, tmp_path):
                 "macro": "macro",
                 "symbol_domain": "domain",
             }
-        ]
+        ]}
+
 
     path = tmp_path / "symbols.json"
     path.write_text(symbol_store.json.dumps(catalog))

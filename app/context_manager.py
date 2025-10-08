@@ -76,8 +76,8 @@ class ContextManager:
         for s in sorted_syms:
             triad = s.triad or []
             macro = s.macro or ""
-
-            line = f"{s.id} | {s.name} |{' '.join(triad)} | {macro}"
+            linked_patterns = " | ".join(s.linked_patterns or [])
+            line = f"{s.id} | {s.name} |{' '.join(triad)} | {macro} | {s.description} | {linked_patterns}"
             t = len(self.encoder.encode(line))
             if tokens_used + t > token_budget:
                 break
@@ -95,7 +95,10 @@ class ContextManager:
             if not agent_id:
                 continue
             name = getattr(agent, "name", "")
-            line = " | ".join(filter(None, [agent_id, name]))
+            triad = " - ".join( getattr(agent, "triad", []))
+            description = getattr(agent, "description", "")
+            activation = " - ".join(getattr(agent, "activation_conditions", []))
+            line = " | ".join(filter(None, [agent_id, name, description, triad, activation]))
             t = len(self.encoder.encode(line))
             if tokens_used + t > token_budget:
                 break
@@ -159,6 +162,8 @@ class ContextManager:
         symbol_token_budget = budgets["symbols"]
         history_token_budget = budgets["history"]
 
+        log.debug("context_manager.budgets", budgets=budgets)
+
         # Construct system block
         system_block = "\n".join(f"SYSTEM: {sp}" for sp in self.system_prompts)
 
@@ -188,4 +193,7 @@ class ContextManager:
             history_characters=len(history_block),
         )
 
-        return "\n\n".join(sections)
+        prompt = "\n\n".join(sections)
+        log.debug("context_manager.prompt_built", prompt=prompt)
+
+        return prompt
