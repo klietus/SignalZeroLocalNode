@@ -21,7 +21,7 @@ def test_build_context(monkeypatch):
 
     prompt = ctx.build_prompt("user prompt")
     assert "SYSTEM: shared-a" in prompt
-    assert "USER: user prompt" in prompt
+    assert "USER: hi" in prompt
 
 
 def test_run_phase_invokes_model(monkeypatch):

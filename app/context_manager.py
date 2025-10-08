@@ -1,8 +1,6 @@
 """Conversation context assembly utilities."""
 from __future__ import annotations
 
-from typing import List
-
 import structlog
 
 from app.logging_config import configure_logging

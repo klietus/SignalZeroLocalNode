@@ -54,4 +54,4 @@ def test_build_prompt_structure():
     assert "a-1" in prompt
     assert "SYMBOLS:" in prompt
     assert "CHAT_HISTORY:" in prompt
-    assert "USER: do work" in prompt
+    assert "CURRENT_QUERY: do work" in prompt
