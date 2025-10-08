@@ -87,11 +87,11 @@ def test_load_symbol_store_merges_existing_data(monkeypatch, tmp_path):
     )
     calls = {"agents": 0, "kits": 0}
 
-    def _load_agents(path="data/agents.json"):
+    def _load_agents(path=None):
         calls["agents"] += 1
         return 0
 
-    def _load_kits(path="data/kits.min.json"):
+    def _load_kits(path=None):
         calls["kits"] += 1
         return 0
 
