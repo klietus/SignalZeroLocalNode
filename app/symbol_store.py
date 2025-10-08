@@ -1,6 +1,6 @@
 # app/symbol_store.py
 
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Union
 
 import json
 import os
@@ -33,6 +33,12 @@ agents_index: Dict[str, AgentPersona] = {}
 
 SYMBOL_KEY_PREFIX = "symbol:"
 
+BASE_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR = Path(os.getenv("DATA_DIR", BASE_DIR / "data"))
+DEFAULT_SYMBOL_CATALOG = DATA_DIR / "symbol_catalog.min.json"
+DEFAULT_AGENTS_PATH = DATA_DIR / "agents.json"
+DEFAULT_KITS_PATH = DATA_DIR / "kits.min.json"
+
 
 def _key(symbol_id: str) -> str:
     return f"{SYMBOL_KEY_PREFIX}{symbol_id}"
@@ -47,9 +53,15 @@ def _persist_symbol(symbol: Symbol) -> None:
         r.sadd("domains", symbol.symbol_domain)
 
 
-def load_agents(path: str = "data/agents.json") -> int:
+def _resolve_path(path: Optional[Union[str, Path]], default: Path) -> Path:
+    if path is None:
+        return default
+    return Path(path)
+
+
+def load_agents(path: Optional[Union[str, Path]] = None) -> int:
     agents_index.clear()
-    file_path = Path(path)
+    file_path = _resolve_path(path, DEFAULT_AGENTS_PATH)
     if not file_path.exists():
         log.warning("symbol_store.agents_file_missing", path=str(file_path))
         return 0
@@ -75,9 +87,9 @@ def load_agents(path: str = "data/agents.json") -> int:
     return count
 
 
-def load_kits(path: str = "data/kits.min.json") -> int:
+def load_kits(path: Optional[Union[str, Path]] = None) -> int:
     kits_index.clear()
-    file_path = Path(path)
+    file_path = _resolve_path(path, DEFAULT_KITS_PATH)
     if not file_path.exists():
         log.warning("symbol_store.kits_file_missing", path=str(file_path))
         return 0
@@ -157,9 +169,11 @@ def _existing_symbol_ids() -> set[str]:
     return existing
 
 
-def load_symbol_store_if_empty(path: str = "data/symbol_catalog.min.json"):
+def load_symbol_store_if_empty(path: Optional[Union[str, Path]] = None):
 
-    log.info("symbol_store.initialise_if_empty", path=path)
+    file_path = _resolve_path(path, DEFAULT_SYMBOL_CATALOG)
+
+    log.info("symbol_store.initialise_if_empty", path=str(file_path))
 
     existing_ids = _existing_symbol_ids()
     if existing_ids:
@@ -167,7 +181,7 @@ def load_symbol_store_if_empty(path: str = "data/symbol_catalog.min.json"):
             "symbol_store.initialise_existing_symbols", existing_count=len(existing_ids)
         )
 
-    with open(path, "r", encoding="utf-8") as f:
+    with open(file_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     if "symbols" not in data or not isinstance(data["symbols"], list):
