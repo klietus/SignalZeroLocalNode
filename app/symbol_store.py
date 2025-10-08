@@ -31,6 +31,21 @@ symbol_index: dict[str, Symbol] = {}
 kits_index: Dict[str, KitDefinition] = {}
 agents_index: Dict[str, AgentPersona] = {}
 
+SYMBOL_KEY_PREFIX = "symbol:"
+
+
+def _key(symbol_id: str) -> str:
+    return f"{SYMBOL_KEY_PREFIX}{symbol_id}"
+
+
+def _persist_symbol(symbol: Symbol) -> None:
+    """Store a symbol in Redis and update auxiliary indexes."""
+
+    r.set(_key(symbol.id), symbol.model_dump_json())
+    embedding_index.add_symbol(symbol)
+    if symbol.symbol_domain:
+        r.sadd("domains", symbol.symbol_domain)
+
 
 def load_agents(path: str = "data/agents.json") -> int:
     agents_index.clear()
@@ -115,9 +130,42 @@ def get_kit(kit_id: str) -> Optional[dict]:
     resolved["anchor"] = _resolve_symbol_id(kit.anchor) if kit.anchor else None
     return resolved
 
+def _existing_symbol_ids() -> set[str]:
+    """Return the set of symbol identifiers already persisted in Redis."""
+
+    existing: set[str] = set()
+
+    def _record(raw_key):
+        key = raw_key.decode("utf-8") if isinstance(raw_key, bytes) else raw_key
+        if key.startswith(SYMBOL_KEY_PREFIX):
+            existing.add(key[len(SYMBOL_KEY_PREFIX) :])
+
+    try:
+        iterator = getattr(r, "scan_iter")
+    except AttributeError:
+        for key in r.keys(f"{SYMBOL_KEY_PREFIX}*"):
+            _record(key)
+        return existing
+
+    try:
+        for key in iterator(match=f"{SYMBOL_KEY_PREFIX}*", count=100):
+            _record(key)
+    except TypeError:  # pragma: no cover - some clients ignore count kwarg
+        for key in iterator(f"{SYMBOL_KEY_PREFIX}*"):
+            _record(key)
+
+    return existing
+
+
 def load_symbol_store_if_empty(path: str = "data/symbol_catalog.min.json"):
 
     log.info("symbol_store.initialise_if_empty", path=path)
+
+    existing_ids = _existing_symbol_ids()
+    if existing_ids:
+        log.info(
+            "symbol_store.initialise_existing_symbols", existing_count=len(existing_ids)
+        )
 
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -125,12 +173,17 @@ def load_symbol_store_if_empty(path: str = "data/symbol_catalog.min.json"):
     if "symbols" not in data or not isinstance(data["symbols"], list):
         raise ValueError("Invalid symbol catalog format: missing 'symbols' key or malformed array.")
 
-    count = 0
+    loaded = 0
+    skipped = 0
     for s in data["symbols"]:
         try:
             symbol = Symbol(**s)
-            r.set(f"symbol:{symbol.id}", symbol.model_dump_json())
-            count += 1
+            if symbol.id in existing_ids:
+                skipped += 1
+                continue
+            _persist_symbol(symbol)
+            existing_ids.add(symbol.id)
+            loaded += 1
         except Exception as e:
             log.error(
                 "symbol_store.symbol_load_failed",
@@ -138,13 +191,9 @@ def load_symbol_store_if_empty(path: str = "data/symbol_catalog.min.json"):
                 error=str(e),
             )
 
-    log.info("symbol_store.symbols_loaded", count=count)
+    log.info("symbol_store.symbols_loaded", count=loaded, skipped=skipped)
     load_agents()
     load_kits()
-
-def _key(symbol_id: str) -> str:
-    return f"symbol:{symbol_id}"
-
 
 def get_symbol(symbol_id: str) -> Optional[Symbol]:
     raw = r.get(_key(symbol_id))
@@ -192,7 +241,7 @@ def put_symbols_bulk(symbols: List[Symbol]) -> str:
 
 
 def get_symbols(domain: Optional[str], tag: Optional[str], start: int, limit: int) -> List[Symbol]:
-    keys = r.keys("symbol:*")
+    keys = r.keys(f"{SYMBOL_KEY_PREFIX}*")
     raw_values = r.mget(keys)
 
     results = []

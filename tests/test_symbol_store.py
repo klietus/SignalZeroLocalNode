@@ -30,6 +30,15 @@ class FakeRedis:
     def delete(self, key):
         return 1 if self.store.pop(key, None) is not None else 0
 
+    def scan_iter(self, match=None, count=None):  # noqa: ARG002 - compatibility helper
+        for key in list(self.store.keys()):
+            if match is None:
+                yield key
+            elif match.endswith("*") and key.startswith(match[:-1]):
+                yield key
+            elif key == match:
+                yield key
+
     # Pipeline support -------------------------------------------------
     def pipeline(self):
         return self
@@ -41,7 +50,12 @@ class FakeRedis:
 def test_load_symbol_store(monkeypatch, tmp_path):
     fake = FakeRedis()
     monkeypatch.setattr(symbol_store, "r", fake)
-    monkeypatch.setattr(symbol_store.embedding_index, "add_symbol", lambda symbol: None)
+    recorded = []
+    monkeypatch.setattr(
+        symbol_store.embedding_index,
+        "add_symbol",
+        lambda symbol: recorded.append(symbol.id),
+    )
 
     catalog = {
         "symbols": [
@@ -58,6 +72,66 @@ def test_load_symbol_store(monkeypatch, tmp_path):
     symbol_store.load_symbol_store_if_empty(path=str(path))
     stored = symbol_store.get_symbol("s1")
     assert stored.id == "s1"
+    assert recorded == ["s1"]
+    assert set(symbol_store.get_domains()) == {"domain"}
+
+
+def test_load_symbol_store_merges_existing_data(monkeypatch, tmp_path):
+    fake = FakeRedis()
+    monkeypatch.setattr(symbol_store, "r", fake)
+    recorded = []
+    monkeypatch.setattr(
+        symbol_store.embedding_index,
+        "add_symbol",
+        lambda symbol: recorded.append(symbol.id),
+    )
+    calls = {"agents": 0, "kits": 0}
+
+    def _load_agents(path="data/agents.json"):
+        calls["agents"] += 1
+        return 0
+
+    def _load_kits(path="data/kits.min.json"):
+        calls["kits"] += 1
+        return 0
+
+    monkeypatch.setattr(symbol_store, "load_agents", _load_agents)
+    monkeypatch.setattr(symbol_store, "load_kits", _load_kits)
+
+    existing = Symbol(id="existing", macro="original", symbol_domain="domain")
+    fake.set(f"symbol:{existing.id}", existing.model_dump_json())
+
+    catalog = {
+        "symbols": [
+            {
+                "id": "existing",
+                "macro": "updated",
+                "symbol_domain": "domain",
+            },
+            {
+                "id": "new",
+                "macro": "macro",
+                "symbol_domain": "domain",
+            }
+        ]
+    }
+
+    path = tmp_path / "symbols.json"
+    path.write_text(symbol_store.json.dumps(catalog))
+
+    symbol_store.load_symbol_store_if_empty(path=str(path))
+
+    stored_existing = symbol_store.get_symbol("existing")
+    stored_new = symbol_store.get_symbol("new")
+
+    assert stored_existing is not None
+    assert stored_existing.id == "existing"
+    assert stored_existing.macro == "original"
+    assert stored_new is not None
+    assert stored_new.id == "new"
+    assert recorded == ["new"]
+    assert set(symbol_store.get_domains()) == {"domain"}
+    assert calls == {"agents": 1, "kits": 1}
 
 
 def test_put_and_get(monkeypatch):
