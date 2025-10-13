@@ -14,7 +14,7 @@ services:
       - ollama
   agent:
     build: .
-    command: ["python3", "app/agency_loop.py"]
+    command: ["python3", "-m", "app.agency_loop"]
     depends_on:
       - web
       - redis

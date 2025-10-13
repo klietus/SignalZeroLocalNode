@@ -6,4 +6,4 @@ echo "Starting SignalZero API + Agency Loop"
 uvicorn app.main:app --host 0.0.0.0 --port 8000 &
 
 # Run agency loop in foreground
-python3 app/agency_loop.py
+python3 -m app.agency_loop
