@@ -17,5 +17,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install redis faiss-cpu sentence-transformers
 
 COPY app/ ./app
+COPY data/ ./data
 
 CMD ["python", "app/main.py"]
