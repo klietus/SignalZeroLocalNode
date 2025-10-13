@@ -8,7 +8,7 @@ import structlog
 
 from app.logging_config import configure_logging
 from app.symbol_store import get_symbol
-from app.types import Symbol
+from app.domain_types import Symbol
 
 
 configure_logging()

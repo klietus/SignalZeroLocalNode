@@ -24,7 +24,7 @@ except Exception:  # pragma: no cover - optional dependency
     SentenceTransformer = None  # type: ignore
 
 from app.logging_config import configure_logging
-from app.types import Symbol
+from app.domain_types import Symbol
 
 
 configure_logging()

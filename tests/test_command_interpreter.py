@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 from app import command_interpreter
 from app.command_interpreter import CommandInterpreter
-from app.types import Symbol
+from app.domain_types import Symbol
 
 
 def test_parse_and_execute(monkeypatch):
