@@ -1,5 +1,5 @@
 from app import command_utils
-from app.types import Symbol
+from app.domain_types import Symbol
 
 
 def test_integrate_command_results_updates_symbols(monkeypatch):
