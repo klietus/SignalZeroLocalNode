@@ -8,16 +8,30 @@ servers:
   - url: https://0.0.0.0/
 paths:
   /query:
-    get:
+    post:
       summary: Query the system by natural language or symbolic payload.
       operationId: query
-      parameters:
-        - name: query
-          in: query
-          required: true
-          schema:
-            type: string
-          description: Natural language query or symbolic payload in JSON
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - query
+                - session_id
+              properties:
+                query:
+                  type: string
+                  description: Natural language query or symbolic payload in JSON.
+                session_id:
+                  type: string
+                  description: Session identifier used to thread agent context.
+      responses:
+        "200":
+          description: Inference result payload containing the reply and trace data.
+        "422":
+          description: Missing or invalid request body.
   /symbols:
     get:
       summary: Retrieve symbols by domain or tag
