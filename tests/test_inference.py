@@ -91,6 +91,11 @@ def test_run_query(monkeypatch):
     assert result["symbols_used"] == ["SZ:STB-Signal-Anchor-006", "s1", "s2"]
     assert result["history_length"] == 3
     assert len(result["commands"]) == 1
+    assert [entry["phase_id"] for entry in result["intermediate_responses"]] == [
+        "phase1",
+        "phase2",
+    ]
+    assert result["intermediate_responses"][-1]["response"] == result["reply"]
     assert interpreter.inputs == [
         "response for prompt::what?::symbols:2::agents:1",
         "response for prompt::what?::symbols:3::agents:1",
