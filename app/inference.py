@@ -80,6 +80,7 @@ def run_query(user_query: str, session_id: str, k: int = 5) -> dict:
 
     final_reply = None
     accumulated_history = []
+    phase_responses: List[dict] = []
 
     interpreter = CommandInterpreter()
     executed_commands = []
@@ -119,6 +120,14 @@ def run_query(user_query: str, session_id: str, k: int = 5) -> dict:
             phase_id=phase_id,
             session_id=session_id,
             reply_length=len(reply_text),
+        )
+
+        phase_responses.append(
+            {
+                "phase_id": phase_id,
+                "workflow": workflow,
+                "response": reply_text,
+            }
         )
 
         # Execute any emitted commands
@@ -182,6 +191,7 @@ def run_query(user_query: str, session_id: str, k: int = 5) -> dict:
         "symbols_used": all_symbol_ids,
         "history_length": len(chat_turns) + len(accumulated_history),
         "commands": executed_commands,
+        "intermediate_responses": phase_responses,
     }
 
 
