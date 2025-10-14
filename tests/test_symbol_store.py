@@ -1,7 +1,7 @@
 from collections import defaultdict
 
 from app import symbol_store
-from app.types import Symbol
+from app.domain_types import Symbol
 
 
 class FakeRedis:

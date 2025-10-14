@@ -13,7 +13,7 @@ from app.context_manager import ContextManager
 from app.logging_config import configure_logging
 from app.model_call import model_call
 from app.symbol_store import get_symbol, get_agent
-from app.types import AgentPersona, Symbol
+from app.domain_types import AgentPersona, Symbol
 from app.default_context_config import DEFAULT_AGENT_IDS, DEFAULT_SYMBOL_IDS
 
 

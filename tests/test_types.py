@@ -1,4 +1,4 @@
-from app.types import Facets, Symbol
+from app.domain_types import Facets, Symbol
 
 
 def test_symbol_allows_extra_fields():

@@ -16,9 +16,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Add inside Dockerfile after base install
 RUN pip install redis faiss-cpu sentence-transformers
 
-# Inside your Dockerfile (optional)
-RUN curl http://ollama:11434/api/pull -d '{"name": "llama3"}'
-
 COPY app/ ./app
+COPY data/ ./data
 
 CMD ["python", "app/main.py"]
