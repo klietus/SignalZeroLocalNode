@@ -17,7 +17,7 @@ from app.context_manager import ContextManager
 from app.logging_config import configure_logging
 from app.model_call import model_call
 from app.symbol_store import get_symbols
-from app.types import Symbol
+from app.domain_types import Symbol
 
 
 configure_logging()

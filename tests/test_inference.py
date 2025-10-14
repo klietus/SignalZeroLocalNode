@@ -1,7 +1,7 @@
 import pytest
 
 from app import inference, command_utils
-from app.types import AgentPersona, Symbol
+from app.domain_types import AgentPersona, Symbol
 
 
 def test_load_prompt_phase_missing(tmp_path):

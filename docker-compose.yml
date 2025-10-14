@@ -12,9 +12,10 @@ services:
     depends_on:
       - redis
       - ollama
+      - model-pull
   agent:
     build: .
-    command: ["python3", "app/agency_loop.py"]
+    command: ["python3", "-m", "app.agency_loop"]
     depends_on:
       - web
       - redis
@@ -39,6 +40,25 @@ services:
       interval: 10s
       timeout: 20s
       retries: 5
+
+  model-pull:
+    image: curlimages/curl:8.8.0
+    depends_on:
+      - ollama
+    entrypoint:
+      - sh
+      - -c
+      - >
+        set -e;
+        until curl -fsS http://ollama:11434/api/version > /dev/null; do
+          sleep 1;
+        done;
+        echo "Pulling model ${MODEL_NAME:-llama3} from Ollama...";
+        curl -fsS -H 'Content-Type: application/json' \
+          -d "{\"name\":\"${MODEL_NAME:-llama3}\"}" \
+          http://ollama:11434/api/pull;
+        echo "Model pulled."
+    restart: "no"
 
 volumes:
   ollama_data:

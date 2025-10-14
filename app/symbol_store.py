@@ -11,7 +11,7 @@ import structlog
 
 from app import embedding_index
 from app.logging_config import configure_logging
-from app.types import AgentPersona, KitDefinition, Symbol
+from app.domain_types import AgentPersona, KitDefinition, Symbol
 
 
 configure_logging()
