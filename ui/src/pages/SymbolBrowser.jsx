@@ -139,11 +139,6 @@ const SymbolBrowser = () => {
                           <span className="font-semibold text-slate-200">{symbol.name}</span>
                         ) : null}
                         {symbol.symbol_tag ? <span>{symbol.symbol_tag}</span> : null}
-                        {symbol.failure_mode ? (
-                          <span className="rounded border border-rose-500/40 bg-rose-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-rose-200">
-                            {symbol.failure_mode}
-                          </span>
-                        ) : null}
                       </div>
                     </button>
                   </li>

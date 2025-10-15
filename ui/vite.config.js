@@ -14,6 +14,10 @@ export default defineConfig({
       '/symbol': {
         target: 'http://localhost:8000',
         changeOrigin: true
+      },
+      '/domains': {
+        target: 'http://localhost:8000',
+        changeOrigin: true
       }
     }
   }
