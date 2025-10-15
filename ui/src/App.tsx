@@ -5,12 +5,14 @@ import InferenceStub from './pages/InferenceStub';
 
 const App = () => {
   return (
-    <div className="app-shell">
+    <div className="flex min-h-screen flex-col bg-slate-950 text-slate-100">
       <TopBar />
-      <Routes>
-        <Route path="/" element={<SymbolBrowser />} />
-        <Route path="/inference" element={<InferenceStub />} />
-      </Routes>
+      <main className="flex-1">
+        <Routes>
+          <Route path="/" element={<SymbolBrowser />} />
+          <Route path="/inference" element={<InferenceStub />} />
+        </Routes>
+      </main>
     </div>
   );
 };
