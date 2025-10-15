@@ -18,6 +18,9 @@ export const useSymbolSearch = () => {
   const [selectedSymbol, setSelectedSymbol] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [domains, setDomains] = useState([]);
+  const [domainsLoading, setDomainsLoading] = useState(false);
+  const [domainError, setDomainError] = useState(null);
 
   const selectedSymbolIdRef = useRef(selectedSymbolId);
   useEffect(() => {
@@ -64,6 +67,73 @@ export const useSymbolSearch = () => {
 
     return response.json();
   }, []);
+
+  const fetchDomains = useCallback(async () => {
+    const response = await fetch(buildUrl('/domains'), {
+      headers: {
+        Accept: 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || `Failed to fetch domains: ${response.statusText}`);
+    }
+
+    return response.json();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadDomains = async () => {
+      setDomainsLoading(true);
+      setDomainError(null);
+
+      try {
+        const loadedDomains = await fetchDomains();
+        if (!cancelled) {
+          setDomains(Array.isArray(loadedDomains) ? loadedDomains : []);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setDomainError(err instanceof Error ? err.message : String(err));
+          setDomains([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setDomainsLoading(false);
+        }
+      }
+    };
+
+    loadDomains();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchDomains]);
+
+  useEffect(() => {
+    if (searchMode !== 'domain') {
+      return;
+    }
+
+    if (domainsLoading) {
+      return;
+    }
+
+    if (!domains || domains.length === 0) {
+      if (query !== '') {
+        setQuery('');
+      }
+      return;
+    }
+
+    if (!domains.includes(query)) {
+      setQuery(domains[0] ?? '');
+    }
+  }, [domains, domainsLoading, query, searchMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -184,6 +254,9 @@ export const useSymbolSearch = () => {
     selectSymbol,
     selectedSymbol,
     loading,
-    error
+    error,
+    domains,
+    domainsLoading,
+    domainError
   };
 };

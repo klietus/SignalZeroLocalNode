@@ -10,7 +10,10 @@ const SymbolBrowser = () => {
     selectSymbol,
     selectedSymbol,
     loading,
-    error
+    error,
+    domains,
+    domainsLoading,
+    domainError
   } = useSymbolSearch();
 
   const selected = selectedSymbol;
@@ -46,16 +49,43 @@ const SymbolBrowser = () => {
                 ))}
               </select>
             </label>
-            <label className="flex flex-col text-sm font-medium text-slate-200">
-              <span>Query</span>
-              <input
-                className={fieldStyles}
-                type="text"
-                placeholder={`Filter by ${searchMode}`}
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
-            </label>
+            {searchMode === 'domain' ? (
+              <label className="flex flex-col text-sm font-medium text-slate-200">
+                <span>Domain</span>
+                <select
+                  className={fieldStyles}
+                  value={query}
+                  disabled={domainsLoading || domains.length === 0}
+                  onChange={(event) => setQuery(event.target.value)}
+                >
+                  {domainsLoading ? (
+                    <option value="">Loading domains…</option>
+                  ) : domains.length === 0 ? (
+                    <option value="">No domains available</option>
+                  ) : (
+                    domains.map((domain) => (
+                      <option key={domain} value={domain}>
+                        {domain}
+                      </option>
+                    ))
+                  )}
+                </select>
+                {domainError ? (
+                  <span className="mt-2 text-xs text-red-300">{domainError}</span>
+                ) : null}
+              </label>
+            ) : (
+              <label className="flex flex-col text-sm font-medium text-slate-200">
+                <span>Query</span>
+                <input
+                  className={fieldStyles}
+                  type="text"
+                  placeholder={`Filter by ${searchMode}`}
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                />
+              </label>
+            )}
           </div>
         </div>
       </div>
@@ -109,6 +139,11 @@ const SymbolBrowser = () => {
                           <span className="font-semibold text-slate-200">{symbol.name}</span>
                         ) : null}
                         {symbol.symbol_tag ? <span>{symbol.symbol_tag}</span> : null}
+                        {symbol.failure_mode ? (
+                          <span className="rounded border border-rose-500/40 bg-rose-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-rose-200">
+                            {symbol.failure_mode}
+                          </span>
+                        ) : null}
                       </div>
                     </button>
                   </li>
@@ -149,11 +184,12 @@ const SymbolBrowser = () => {
                 <DetailCard label="Triad" value={selected.triad ?? '—'} />
                 <DetailCard label="Origin" value={selected.origin ?? '—'} />
                 <DetailCard label="Version" value={selected.version ?? '—'} />
+                <DetailCard label="Failure Mode" value={selected.failure_mode ?? '—'} />
               </dl>
               {selected.facets ? (
                 <section className="space-y-3">
                   <h4 className="text-sm font-semibold uppercase tracking-wider text-slate-300">Facets</h4>
-                  <dl className="grid gap-3">
+                  <dl className="grid gap-3 md:grid-cols-2">
                     {Object.entries(selected.facets).map(([key, value]) => (
                       <DetailCard key={key} label={key} value={value} />
                     ))}
