@@ -11,7 +11,7 @@ const buildUrl = (path, params) => {
 };
 
 export const useSymbolSearch = () => {
-  const [searchMode, setSearchMode] = useState('id');
+  const [searchMode, rawSetSearchMode] = useState('id');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [selectedSymbolId, setSelectedSymbolId] = useState(null);
@@ -130,6 +130,10 @@ export const useSymbolSearch = () => {
       return;
     }
 
+    if (query === '') {
+      return;
+    }
+
     if (!domains.includes(query)) {
       setQuery(domains[0] ?? '');
     }
@@ -144,6 +148,20 @@ export const useSymbolSearch = () => {
 
       try {
         const trimmedQuery = query.trim();
+
+        if (searchMode === 'id' && !trimmedQuery) {
+          setResults([]);
+          setSelectedSymbolId(null);
+          setSelectedSymbol(null);
+          return;
+        }
+
+        if ((searchMode === 'domain' || searchMode === 'tag') && !trimmedQuery) {
+          setResults([]);
+          setSelectedSymbolId(null);
+          setSelectedSymbol(null);
+          return;
+        }
 
         if (searchMode === 'id' && trimmedQuery) {
           const symbol = await fetchSymbolById(trimmedQuery);
@@ -243,6 +261,23 @@ export const useSymbolSearch = () => {
       }
     },
     [fetchSymbolById, results]
+  );
+
+  const setSearchMode = useCallback(
+    (mode) => {
+      if (mode === searchMode) {
+        return;
+      }
+
+      rawSetSearchMode(mode);
+      setQuery('');
+      setResults([]);
+      setSelectedSymbolId(null);
+      setSelectedSymbol(null);
+      setError(null);
+      selectedSymbolIdRef.current = null;
+    },
+    [rawSetSearchMode, searchMode]
   );
 
   return {

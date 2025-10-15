@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { SEARCH_MODES, useSymbolSearch } from '../hooks/useSymbolSearch';
 
 const SymbolBrowser = () => {
@@ -15,6 +16,26 @@ const SymbolBrowser = () => {
     domainsLoading,
     domainError
   } = useSymbolSearch();
+
+  const queryInputRef = useRef(null);
+  const domainSelectRef = useRef(null);
+
+  useEffect(() => {
+    if (searchMode === 'domain') {
+      if (domainsLoading || domains.length === 0) {
+        return;
+      }
+      domainSelectRef.current?.focus();
+    } else {
+      if (!queryInputRef.current) {
+        return;
+      }
+      queryInputRef.current.focus();
+      if (typeof queryInputRef.current.select === 'function') {
+        queryInputRef.current.select();
+      }
+    }
+  }, [searchMode, domainsLoading, domains.length]);
 
   const selected = selectedSymbol;
 
@@ -52,24 +73,28 @@ const SymbolBrowser = () => {
             {searchMode === 'domain' ? (
               <label className="flex flex-col text-sm font-medium text-slate-200">
                 <span>Domain</span>
-                <select
-                  className={fieldStyles}
-                  value={query}
-                  disabled={domainsLoading || domains.length === 0}
-                  onChange={(event) => setQuery(event.target.value)}
-                >
-                  {domainsLoading ? (
-                    <option value="">Loading domains…</option>
-                  ) : domains.length === 0 ? (
-                    <option value="">No domains available</option>
-                  ) : (
-                    domains.map((domain) => (
+              <select
+                ref={domainSelectRef}
+                className={fieldStyles}
+                value={query}
+                disabled={domains.length === 0}
+                onChange={(event) => setQuery(event.target.value)}
+              >
+                {domainsLoading && domains.length === 0 ? (
+                  <option value="">Loading domains…</option>
+                ) : domains.length === 0 ? (
+                  <option value="">No domains available</option>
+                ) : (
+                  <>
+                    <option value="">Select a domain…</option>
+                    {domains.map((domain) => (
                       <option key={domain} value={domain}>
                         {domain}
                       </option>
-                    ))
-                  )}
-                </select>
+                    ))}
+                  </>
+                )}
+              </select>
                 {domainError ? (
                   <span className="mt-2 text-xs text-red-300">{domainError}</span>
                 ) : null}
@@ -78,6 +103,7 @@ const SymbolBrowser = () => {
               <label className="flex flex-col text-sm font-medium text-slate-200">
                 <span>Query</span>
                 <input
+                  ref={queryInputRef}
                   className={fieldStyles}
                   type="text"
                   placeholder={`Filter by ${searchMode}`}
