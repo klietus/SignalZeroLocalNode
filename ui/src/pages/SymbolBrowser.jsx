@@ -205,7 +205,11 @@ const SymbolBrowser = () => {
                 <DetailCard label="Triad" value={selected.triad ?? '—'} />
                 <DetailCard label="Origin" value={selected.origin ?? '—'} />
                 <DetailCard label="Version" value={selected.version ?? '—'} />
-                <DetailCard label="Failure Mode" value={selected.failure_mode ?? '—'} />
+                <DetailCard
+                  label="Failure Mode"
+                  value={selected.failure_mode ?? '—'}
+                  tone="danger"
+                />
               </dl>
               {selected.facets ? (
                 <section className="space-y-3">
@@ -268,12 +272,29 @@ const SymbolBrowser = () => {
   );
 };
 
-const DetailCard = ({ label, value }) => (
-  <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
-    <dt className="text-xs font-semibold uppercase tracking-wider text-slate-400">{label}</dt>
-    <dd className="mt-1 whitespace-pre-wrap font-mono text-sm text-slate-100">{formatValue(value)}</dd>
-  </div>
-);
+const DetailCard = ({ label, value, tone = 'default' }) => {
+  const toneClasses =
+    tone === 'danger'
+      ? {
+          card: 'border-red-500/40 bg-red-950/30 shadow-inner shadow-red-950/30',
+          label: 'text-red-300',
+          value: 'text-red-100'
+        }
+      : {
+          card: 'border-slate-800 bg-slate-950/40',
+          label: 'text-slate-400',
+          value: 'text-slate-100'
+        };
+
+  return (
+    <div className={`rounded-xl border p-4 ${toneClasses.card}`}>
+      <dt className={`text-xs font-semibold uppercase tracking-wider ${toneClasses.label}`}>{label}</dt>
+      <dd className={`mt-1 whitespace-pre-wrap font-mono text-sm ${toneClasses.value}`}>
+        {formatValue(value)}
+      </dd>
+    </div>
+  );
+};
 
 const formatValue = (value) => {
   if (value === null || value === undefined || value === '') {
