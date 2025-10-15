@@ -26,6 +26,22 @@ The app listens on [http://localhost:5173](http://localhost:5173) by default and
 requests to the FastAPI service at [http://localhost:8000](http://localhost:8000). If your API
 is hosted elsewhere, set `VITE_API_BASE_URL` in a `.env` file inside the `ui/` directory.
 
+To automatically open a browser when running locally, set `VITE_DEV_SERVER_OPEN=true` in your
+environment (for example by adding it to `.env`). The Docker development container disables this
+behavior to avoid `xdg-open` errors in headless environments.
+
+### Docker Compose workflow
+
+The repository includes a `ui` service that runs the dev server alongside the API. Bring both
+services up together so the proxy can reach FastAPI:
+
+```bash
+docker compose up web ui
+```
+
+The `ui` container respects the same `VITE_API_BASE_URL` configuration when present and uses the
+internal proxy target configured via `VITE_DEV_PROXY_TARGET` (defaults to the `web` service).
+
 ## Project structure
 
 - `src/` – React components, pages, hooks, and styles for the UI

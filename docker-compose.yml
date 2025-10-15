@@ -21,6 +21,7 @@ services:
       - "5173:5173"
     environment:
       - VITE_DEV_PROXY_TARGET=http://web:8000
+      - VITE_DEV_SERVER_OPEN=false
     volumes:
       - ./ui:/app
     depends_on:
