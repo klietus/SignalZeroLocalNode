@@ -22,21 +22,9 @@ Run the development server with hot reloading:
 npm run dev
 ```
 
-The app listens on [http://localhost:5173](http://localhost:5173) by default.
-
-## Production build
-
-Create an optimized production build:
-
-```bash
-npm run build
-```
-
-Preview the production build locally:
-
-```bash
-npm run preview
-```
+The app listens on [http://localhost:5173](http://localhost:5173) by default and proxies API
+requests to the FastAPI service at [http://localhost:8000](http://localhost:8000). If your API
+is hosted elsewhere, set `VITE_API_BASE_URL` in a `.env` file inside the `ui/` directory.
 
 ## Project structure
 
@@ -46,5 +34,6 @@ npm run preview
 
 ## Notes
 
-- The current implementation uses mock symbol data located in `src/data/sampleSymbols.js`.
+- Symbol search runs against the running Signal Zero API (`/symbols` and `/symbol/{id}`
+  endpoints).
 - The inference console is a stub and will be implemented in a future iteration.

@@ -1,57 +1,179 @@
-import { useMemo, useState } from 'react';
-import { sampleSymbols } from '../data/sampleSymbols';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export const SEARCH_MODES = ['id', 'domain', 'tag'];
+
+const DEFAULT_RESULT_LIMIT = 20;
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
+
+const buildUrl = (path, params) => {
+  const query = params && params.toString();
+  return `${API_BASE_URL}${path}${query ? `?${query}` : ''}`;
+};
 
 export const useSymbolSearch = () => {
   const [searchMode, setSearchMode] = useState('id');
   const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
   const [selectedSymbolId, setSelectedSymbolId] = useState(null);
+  const [selectedSymbol, setSelectedSymbol] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  const results = useMemo(() => {
-    const trimmedQuery = query.trim().toLowerCase();
+  const selectedSymbolIdRef = useRef(selectedSymbolId);
+  useEffect(() => {
+    selectedSymbolIdRef.current = selectedSymbolId;
+  }, [selectedSymbolId]);
 
-    const byId = (left, right) => left.id.localeCompare(right.id);
-
-    if (!trimmedQuery) {
-      return [...sampleSymbols].sort(byId);
+  const fetchSymbolById = useCallback(async (symbolId) => {
+    const trimmed = symbolId?.trim();
+    if (!trimmed) {
+      return null;
     }
 
-    switch (searchMode) {
-      case 'id':
-        return sampleSymbols
-          .filter((symbol) => symbol.id.toLowerCase().includes(trimmedQuery))
-          .sort(byId);
-      case 'domain':
-        return sampleSymbols
-          .filter((symbol) => symbol.domain.toLowerCase().includes(trimmedQuery))
-          .sort(byId);
-      case 'tag':
-        return sampleSymbols
-          .filter((symbol) =>
-            symbol.tags.some((tag) => tag.toLowerCase().includes(trimmedQuery))
-          )
-          .sort(byId);
-      default:
-        return [...sampleSymbols].sort(byId);
-    }
-  }, [query, searchMode]);
+    const response = await fetch(buildUrl(`/symbol/${encodeURIComponent(trimmed)}`), {
+      headers: {
+        Accept: 'application/json'
+      }
+    });
 
-  const selectedSymbol = useMemo(() => {
-    if (selectedSymbolId) {
-      return sampleSymbols.find((symbol) => symbol.id === selectedSymbolId) ?? null;
+    if (response.status === 404) {
+      return null;
     }
 
-    if (results.length === 1) {
-      return results[0];
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        errorText || `Failed to fetch symbol ${trimmed}: ${response.status} ${response.statusText}`
+      );
     }
 
-    return null;
-  }, [results, selectedSymbolId]);
+    return response.json();
+  }, []);
 
-  const selectSymbol = (symbolId) => {
-    setSelectedSymbolId(symbolId);
-  };
+  const fetchSymbolList = useCallback(async (params) => {
+    const response = await fetch(buildUrl('/symbols', params), {
+      headers: {
+        Accept: 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || `Failed to fetch symbols: ${response.statusText}`);
+    }
+
+    return response.json();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const trimmedQuery = query.trim();
+
+        if (searchMode === 'id' && trimmedQuery) {
+          const symbol = await fetchSymbolById(trimmedQuery);
+          if (cancelled) {
+            return;
+          }
+
+          if (symbol) {
+            setResults([symbol]);
+            setSelectedSymbolId(symbol.id);
+            setSelectedSymbol(symbol);
+          } else {
+            setResults([]);
+            setSelectedSymbolId(null);
+            setSelectedSymbol(null);
+          }
+          return;
+        }
+
+        const params = new URLSearchParams();
+
+        if (searchMode === 'domain' && trimmedQuery) {
+          params.set('symbol_domain', trimmedQuery);
+        } else if (searchMode === 'tag' && trimmedQuery) {
+          params.set('symbol_tag', trimmedQuery);
+        }
+
+        params.set('limit', String(DEFAULT_RESULT_LIMIT));
+
+        const symbols = await fetchSymbolList(params);
+        if (cancelled) {
+          return;
+        }
+
+        setResults(symbols);
+
+        if (symbols.length === 0) {
+          setSelectedSymbolId(null);
+          setSelectedSymbol(null);
+          return;
+        }
+
+        const currentSelectedId = selectedSymbolIdRef.current;
+        const nextSymbol =
+          symbols.find((symbol) => symbol.id === currentSelectedId) ?? symbols[0];
+
+        setSelectedSymbolId(nextSymbol.id);
+        setSelectedSymbol(nextSymbol);
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : String(err));
+          setResults([]);
+          setSelectedSymbolId(null);
+          setSelectedSymbol(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchSymbolById, fetchSymbolList, query, searchMode]);
+
+  const selectSymbol = useCallback(
+    async (symbolId) => {
+      const trimmed = symbolId?.trim();
+      if (!trimmed) {
+        setSelectedSymbolId(null);
+        setSelectedSymbol(null);
+        return;
+      }
+
+      setSelectedSymbolId(trimmed);
+
+      const fromResults = results.find((symbol) => symbol.id === trimmed);
+      if (fromResults) {
+        setSelectedSymbol(fromResults);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError(null);
+        const symbol = await fetchSymbolById(trimmed);
+        setSelectedSymbol(symbol);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+        setSelectedSymbol(null);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [fetchSymbolById, results]
+  );
 
   return {
     searchMode,
@@ -60,6 +182,8 @@ export const useSymbolSearch = () => {
     setQuery,
     results,
     selectSymbol,
-    selectedSymbol
+    selectedSymbol,
+    loading,
+    error
   };
 };

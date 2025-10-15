@@ -5,6 +5,16 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    open: true
+    open: true,
+    proxy: {
+      '/symbols': {
+        target: 'http://localhost:8000',
+        changeOrigin: true
+      },
+      '/symbol': {
+        target: 'http://localhost:8000',
+        changeOrigin: true
+      }
+    }
   }
 });

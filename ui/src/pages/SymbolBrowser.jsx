@@ -1,5 +1,4 @@
 import { SEARCH_MODES, useSymbolSearch } from '../hooks/useSymbolSearch';
-import { sampleSymbols } from '../data/sampleSymbols';
 
 const SymbolBrowser = () => {
   const {
@@ -9,7 +8,9 @@ const SymbolBrowser = () => {
     setQuery,
     results,
     selectSymbol,
-    selectedSymbol
+    selectedSymbol,
+    loading,
+    error
   } = useSymbolSearch();
 
   const selected = selectedSymbol;
@@ -29,7 +30,7 @@ const SymbolBrowser = () => {
             metadata and explore related symbols.
           </p>
         </div>
-        <div className={`${cardStyles} space-y-4`}> 
+        <div className={`${cardStyles} space-y-4`}>
           <div className="grid gap-4 lg:grid-cols-[220px,1fr] lg:items-end">
             <label className="flex flex-col text-sm font-medium text-slate-200">
               <span>Search Mode</span>
@@ -67,7 +68,15 @@ const SymbolBrowser = () => {
               {results.length} match{results.length === 1 ? '' : 'es'}
             </span>
           </div>
-          {results.length === 0 ? (
+          {error ? (
+            <p className="rounded-xl border border-red-500/40 bg-red-950/20 px-4 py-3 text-sm text-red-300">
+              {error}
+            </p>
+          ) : loading && results.length === 0 ? (
+            <p className="rounded-xl border border-slate-800 bg-slate-900/80 px-4 py-6 text-sm text-slate-400">
+              Loading symbols…
+            </p>
+          ) : results.length === 0 ? (
             <p className="rounded-xl border border-dashed border-slate-800 bg-slate-900/80 px-4 py-6 text-sm text-slate-400">
               No symbols matched your query.
             </p>
@@ -85,12 +94,21 @@ const SymbolBrowser = () => {
                       }`}
                       onClick={() => selectSymbol(symbol.id)}
                     >
-                      <span className="font-mono text-xs uppercase tracking-wider text-slate-300">
-                        {symbol.id}
-                      </span>
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-mono text-xs uppercase tracking-wider text-slate-300">
+                          {symbol.id}
+                        </span>
+                        {symbol.symbol_domain ? (
+                          <span className="rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-300">
+                            {symbol.symbol_domain}
+                          </span>
+                        ) : null}
+                      </div>
                       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
-                        <span className="font-semibold text-slate-200">{symbol.domain}</span>
-                        <span>{symbol.tags.join(', ')}</span>
+                        {symbol.name ? (
+                          <span className="font-semibold text-slate-200">{symbol.name}</span>
+                        ) : null}
+                        {symbol.symbol_tag ? <span>{symbol.symbol_tag}</span> : null}
                       </div>
                     </button>
                   </li>
@@ -102,67 +120,88 @@ const SymbolBrowser = () => {
 
         <div className={`${cardStyles} flex flex-col gap-4 lg:max-h-[calc(100vh-220px)] lg:overflow-y-auto`}>
           <h2 className="text-lg font-semibold text-white">Details</h2>
-          {!selected ? (
+          {loading && !selected ? (
+            <p className="rounded-xl border border-slate-800 bg-slate-900/80 px-4 py-6 text-sm text-slate-400">
+              Loading symbol details…
+            </p>
+          ) : !selected ? (
             <p className="rounded-xl border border-dashed border-slate-800 bg-slate-900/80 px-4 py-6 text-sm text-slate-400">
               Select a symbol to see its metadata and linked symbols.
             </p>
           ) : (
             <article className="space-y-6">
               <header className="space-y-1">
-                <h3 className="text-2xl font-semibold text-white">{selected.name}</h3>
-                <p className="font-mono text-xs uppercase tracking-widest text-slate-400">
-                  {selected.id}
-                </p>
+                <h3 className="text-2xl font-semibold text-white">{selected.name ?? selected.id}</h3>
+                <p className="font-mono text-xs uppercase tracking-widest text-slate-400">{selected.id}</p>
               </header>
-              <p className="text-sm leading-relaxed text-slate-200">{selected.summary}</p>
+              {selected.description ? (
+                <p className="text-sm leading-relaxed text-slate-200">{selected.description}</p>
+              ) : null}
+              {selected.macro ? (
+                <pre className="whitespace-pre-wrap rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-xs text-slate-200">
+                  {selected.macro}
+                </pre>
+              ) : null}
               <dl className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
-                  <dt className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                    Domain
-                  </dt>
-                  <dd className="mt-1 font-mono text-sm text-slate-100">{selected.domain}</dd>
-                </div>
-                <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
-                  <dt className="text-xs font-semibold uppercase tracking-wider text-slate-400">Tags</dt>
-                  <dd className="mt-1 font-mono text-sm text-slate-100">{selected.tags.join(', ')}</dd>
-                </div>
-                {Object.entries(selected.metadata).map(([key, value]) => (
-                  <div key={key} className="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
-                    <dt className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                      {key}
-                    </dt>
-                    <dd className="mt-1 font-mono text-sm text-slate-100">{String(value)}</dd>
-                  </div>
-                ))}
+                <DetailCard label="Domain" value={selected.symbol_domain ?? '—'} />
+                <DetailCard label="Tag" value={selected.symbol_tag ?? '—'} />
+                <DetailCard label="Symbolic Role" value={selected.symbolic_role ?? '—'} />
+                <DetailCard label="Triad" value={selected.triad ?? '—'} />
+                <DetailCard label="Origin" value={selected.origin ?? '—'} />
+                <DetailCard label="Version" value={selected.version ?? '—'} />
               </dl>
+              {selected.facets ? (
+                <section className="space-y-3">
+                  <h4 className="text-sm font-semibold uppercase tracking-wider text-slate-300">Facets</h4>
+                  <dl className="grid gap-3">
+                    {Object.entries(selected.facets).map(([key, value]) => (
+                      <DetailCard key={key} label={key} value={value} />
+                    ))}
+                  </dl>
+                </section>
+              ) : null}
+              {selected.invocations && selected.invocations.length > 0 ? (
+                <section className="space-y-3">
+                  <h4 className="text-sm font-semibold uppercase tracking-wider text-slate-300">Invocations</h4>
+                  <ul className="space-y-2">
+                    {selected.invocations.map((item) => (
+                      <li
+                        key={item}
+                        className="rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-2 text-sm text-slate-200"
+                      >
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
               <section className="space-y-3">
-                <h4 className="text-sm font-semibold uppercase tracking-wider text-slate-300">
-                  Linked Symbols
-                </h4>
-                {selected.linkedSymbolIds.length === 0 ? (
+                <h4 className="text-sm font-semibold uppercase tracking-wider text-slate-300">Linked Symbols</h4>
+                {!selected.linked_patterns || selected.linked_patterns.length === 0 ? (
                   <p className="text-sm italic text-slate-400">No linked symbols</p>
                 ) : (
                   <ul className="space-y-2">
-                    {selected.linkedSymbolIds.map((id) => {
-                      const symbol = sampleSymbols.find((item) => item.id === id);
-                      return (
-                        <li key={id}>
-                          <button
-                            className="flex w-full flex-col items-start gap-1 rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-left text-sm text-slate-200 transition hover:border-slate-700 hover:bg-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400"
-                            onClick={() => selectSymbol(id)}
-                          >
-                            <span className="font-mono text-xs uppercase tracking-wider text-slate-300">
-                              {id}
-                            </span>
-                            {symbol ? (
-                              <span className="text-sm font-medium text-slate-100">{symbol.name}</span>
-                            ) : null}
-                          </button>
-                        </li>
-                      );
-                    })}
+                    {selected.linked_patterns.map((id) => (
+                      <li key={id}>
+                        <button
+                          className="flex w-full flex-col items-start gap-1 rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3 text-left text-sm text-slate-200 transition hover:border-slate-700 hover:bg-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400"
+                          onClick={() => {
+                            setSearchMode('id');
+                            setQuery(id);
+                          }}
+                        >
+                          <span className="font-mono text-xs uppercase tracking-wider text-slate-300">{id}</span>
+                        </button>
+                      </li>
+                    ))}
                   </ul>
                 )}
+              </section>
+              <section className="space-y-3">
+                <h4 className="text-sm font-semibold uppercase tracking-wider text-slate-300">Raw JSON</h4>
+                <pre className="max-h-80 overflow-auto rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-[11px] leading-relaxed text-slate-200">
+                  {JSON.stringify(selected, null, 2)}
+                </pre>
               </section>
             </article>
           )}
@@ -170,6 +209,29 @@ const SymbolBrowser = () => {
       </div>
     </section>
   );
+};
+
+const DetailCard = ({ label, value }) => (
+  <div className="rounded-xl border border-slate-800 bg-slate-950/40 p-4">
+    <dt className="text-xs font-semibold uppercase tracking-wider text-slate-400">{label}</dt>
+    <dd className="mt-1 whitespace-pre-wrap font-mono text-sm text-slate-100">{formatValue(value)}</dd>
+  </div>
+);
+
+const formatValue = (value) => {
+  if (value === null || value === undefined || value === '') {
+    return '—';
+  }
+
+  if (Array.isArray(value)) {
+    return value.length > 0 ? value.join(', ') : '—';
+  }
+
+  if (typeof value === 'object') {
+    return JSON.stringify(value, null, 2);
+  }
+
+  return value;
 };
 
 export default SymbolBrowser;
