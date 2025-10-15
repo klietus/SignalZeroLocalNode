@@ -1,28 +1,17 @@
-import { Dispatch, SetStateAction, useMemo, useState } from 'react';
-import { sampleSymbols, SymbolRecord } from '../data/sampleSymbols';
+import { useMemo, useState } from 'react';
+import { sampleSymbols } from '../data/sampleSymbols';
 
-export type SearchMode = 'id' | 'domain' | 'tag';
+export const SEARCH_MODES = ['id', 'domain', 'tag'];
 
-interface UseSymbolSearchResult {
-  searchMode: SearchMode;
-  setSearchMode: Dispatch<SetStateAction<SearchMode>>;
-  query: string;
-  setQuery: Dispatch<SetStateAction<string>>;
-  results: SymbolRecord[];
-  selectSymbol: (symbolId: string) => void;
-  selectedSymbol: SymbolRecord | null;
-}
-
-export const useSymbolSearch = (): UseSymbolSearchResult => {
-  const [searchMode, setSearchMode] = useState<SearchMode>('id');
+export const useSymbolSearch = () => {
+  const [searchMode, setSearchMode] = useState('id');
   const [query, setQuery] = useState('');
-  const [selectedSymbolId, setSelectedSymbolId] = useState<string | null>(null);
+  const [selectedSymbolId, setSelectedSymbolId] = useState(null);
 
   const results = useMemo(() => {
     const trimmedQuery = query.trim().toLowerCase();
 
-    const byId = (left: SymbolRecord, right: SymbolRecord) =>
-      left.id.localeCompare(right.id);
+    const byId = (left, right) => left.id.localeCompare(right.id);
 
     if (!trimmedQuery) {
       return [...sampleSymbols].sort(byId);
@@ -60,7 +49,7 @@ export const useSymbolSearch = (): UseSymbolSearchResult => {
     return null;
   }, [results, selectedSymbolId]);
 
-  const selectSymbol = (symbolId: string) => {
+  const selectSymbol = (symbolId) => {
     setSelectedSymbolId(symbolId);
   };
 

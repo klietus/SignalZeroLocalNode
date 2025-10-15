@@ -1,4 +1,4 @@
-import { SearchMode, useSymbolSearch } from '../hooks/useSymbolSearch';
+import { SEARCH_MODES, useSymbolSearch } from '../hooks/useSymbolSearch';
 import { sampleSymbols } from '../data/sampleSymbols';
 
 const SymbolBrowser = () => {
@@ -36,11 +36,13 @@ const SymbolBrowser = () => {
               <select
                 className={fieldStyles}
                 value={searchMode}
-                onChange={(event) => setSearchMode(event.target.value as SearchMode)}
+                onChange={(event) => setSearchMode(event.target.value)}
               >
-                <option value="id">ID</option>
-                <option value="domain">Domain</option>
-                <option value="tag">Tag</option>
+                {SEARCH_MODES.map((mode) => (
+                  <option key={mode} value={mode}>
+                    {mode === 'id' ? 'ID' : mode.charAt(0).toUpperCase() + mode.slice(1)}
+                  </option>
+                ))}
               </select>
             </label>
             <label className="flex flex-col text-sm font-medium text-slate-200">

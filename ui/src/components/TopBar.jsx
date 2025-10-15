@@ -3,9 +3,9 @@ import { Link, useLocation } from 'react-router-dom';
 const TopBar = () => {
   const location = useLocation();
 
-  const isActive = (path: string) => location.pathname === path;
+  const isActive = (path) => location.pathname === path;
 
-  const linkClass = (path: string) => {
+  const linkClass = (path) => {
     const base =
       'rounded-lg px-4 py-2 text-sm font-medium transition-colors duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400';
     const active = 'bg-sky-400 text-slate-900 shadow';

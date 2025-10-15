@@ -1,14 +1,4 @@
-export interface SymbolRecord {
-  id: string;
-  name: string;
-  domain: string;
-  tags: string[];
-  summary: string;
-  metadata: Record<string, string | number | boolean>;
-  linkedSymbolIds: string[];
-}
-
-export const sampleSymbols: SymbolRecord[] = [
+export const sampleSymbols = [
   {
     id: 'agent/core/planner',
     name: 'Planner Agent',
