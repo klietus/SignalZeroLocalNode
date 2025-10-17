@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import { useNavigate } from 'react-router-dom';
 import useInference from '../hooks/useInference';
 
 const cardStyles =
@@ -19,6 +21,7 @@ const Inference = () => {
 
   const [prompt, setPrompt] = useState('');
   const [showDetails, setShowDetails] = useState(false);
+  const navigate = useNavigate();
 
   const commands = useMemo(() => (Array.isArray(result?.commands) ? result.commands : []), [result]);
   const intermediateSteps = useMemo(
@@ -55,7 +58,24 @@ const Inference = () => {
     resetSession();
   };
 
-  const finalReply = result?.reply ?? '';
+  const finalReply =
+    typeof result?.reply === 'string'
+      ? result.reply
+      : result?.reply !== undefined
+        ? JSON.stringify(result.reply, null, 2)
+        : '';
+
+  const renderMarkdown = (content) => {
+    const text = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
+    return <ReactMarkdown className="markdown-body">{text}</ReactMarkdown>;
+  };
+
+  const handleSymbolClick = (symbol) => {
+    if (!symbol) {
+      return;
+    }
+    navigate({ pathname: '/', search: `?symbolId=${encodeURIComponent(symbol)}` });
+  };
 
   return (
     <section className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-6 py-10">
@@ -153,7 +173,9 @@ const Inference = () => {
                   {showDetails ? 'Hide details' : 'Show details'}
                 </span>
               </div>
-              <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-slate-200">{finalReply}</p>
+              <div className="mt-3 rounded-xl border border-slate-800/60 bg-slate-950/40 px-4 py-3">
+                {renderMarkdown(finalReply)}
+              </div>
               <p className="mt-3 text-xs text-slate-400">
                 Click to {showDetails ? 'collapse' : 'reveal'} intermediate steps and artifacts.
               </p>
@@ -183,9 +205,9 @@ const Inference = () => {
                                 {workflow}
                               </span>
                             </div>
-                            <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-200">
-                              {response}
-                            </p>
+                            <div className="mt-2 rounded-lg border border-slate-800/60 bg-slate-950/40 px-3 py-2">
+                              {renderMarkdown(response)}
+                            </div>
                           </li>
                         );
                       })}
@@ -216,12 +238,15 @@ const Inference = () => {
                   ) : (
                     <div className="flex flex-wrap gap-2">
                       {symbolsUsed.map((symbol) => (
-                        <span
+                        <button
+                          type="button"
                           key={symbol}
-                          className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs font-mono text-slate-200"
+                          className="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs font-mono text-slate-200 transition hover:border-sky-500 hover:text-sky-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400"
+                          onClick={() => handleSymbolClick(symbol)}
+                          title="View symbol details"
                         >
                           {symbol}
-                        </span>
+                        </button>
                       ))}
                     </div>
                   )}
