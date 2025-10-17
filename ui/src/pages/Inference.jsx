@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { useNavigate } from 'react-router-dom';
 import useInference from '../hooks/useInference';
@@ -7,6 +7,21 @@ const cardStyles =
   'rounded-2xl border border-slate-800 bg-slate-900/60 p-6 shadow-lg shadow-slate-950/30 backdrop-blur';
 const fieldStyles =
   'mt-2 w-full rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 shadow-inner shadow-slate-950/40 transition focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40';
+
+const PROMPT_STORAGE_KEY = 'inference:last-prompt';
+
+const readPersistedPrompt = () => {
+  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
+    return '';
+  }
+
+  try {
+    return window.localStorage.getItem(PROMPT_STORAGE_KEY) ?? '';
+  } catch (error) {
+    console.warn('Failed to read persisted inference prompt:', error);
+    return '';
+  }
+};
 
 const Inference = () => {
   const {
@@ -19,9 +34,25 @@ const Inference = () => {
     result
   } = useInference();
 
-  const [prompt, setPrompt] = useState('');
+  const [prompt, setPrompt] = useState(() => readPersistedPrompt());
   const [showDetails, setShowDetails] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
+      return;
+    }
+
+    try {
+      if (!prompt) {
+        window.localStorage.removeItem(PROMPT_STORAGE_KEY);
+      } else {
+        window.localStorage.setItem(PROMPT_STORAGE_KEY, prompt);
+      }
+    } catch (error) {
+      console.warn('Failed to persist inference prompt:', error);
+    }
+  }, [prompt]);
 
   const commands = useMemo(() => (Array.isArray(result?.commands) ? result.commands : []), [result]);
   const intermediateSteps = useMemo(
