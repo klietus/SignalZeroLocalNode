@@ -27,6 +27,10 @@ export default defineConfig(({ mode }) => {
         '/domains': {
           target: proxyTarget,
           changeOrigin: true
+        },
+        '/query': {
+          target: proxyTarget,
+          changeOrigin: true
         }
       }
     }
