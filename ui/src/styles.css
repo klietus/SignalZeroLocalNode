@@ -15,3 +15,58 @@
     @apply min-h-screen;
   }
 }
+
+@layer components {
+  .markdown-body {
+    @apply space-y-3 text-sm leading-relaxed text-slate-200;
+  }
+
+  .markdown-body h1,
+  .markdown-body h2,
+  .markdown-body h3,
+  .markdown-body h4,
+  .markdown-body h5,
+  .markdown-body h6 {
+    @apply font-semibold text-white;
+  }
+
+  .markdown-body h1 {
+    @apply text-2xl;
+  }
+
+  .markdown-body h2 {
+    @apply text-xl;
+  }
+
+  .markdown-body h3 {
+    @apply text-lg;
+  }
+
+  .markdown-body ul {
+    @apply list-disc space-y-2 pl-5;
+  }
+
+  .markdown-body ol {
+    @apply list-decimal space-y-2 pl-5;
+  }
+
+  .markdown-body blockquote {
+    @apply border-l-4 border-slate-700/60 bg-slate-900/60 px-4 py-2 italic text-slate-300;
+  }
+
+  .markdown-body code {
+    @apply rounded bg-slate-800/80 px-1 py-0.5 font-mono text-xs text-slate-100;
+  }
+
+  .markdown-body pre {
+    @apply overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-xs text-slate-100;
+  }
+
+  .markdown-body pre code {
+    @apply bg-transparent p-0 text-inherit;
+  }
+
+  .markdown-body a {
+    @apply font-medium text-sky-400 underline decoration-sky-500/50 underline-offset-4 transition hover:text-sky-300;
+  }
+}

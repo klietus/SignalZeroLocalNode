@@ -1,7 +1,7 @@
 import { Route, Routes } from 'react-router-dom';
 import TopBar from './components/TopBar';
 import SymbolBrowser from './pages/SymbolBrowser';
-import InferenceStub from './pages/InferenceStub';
+import Inference from './pages/Inference';
 
 const App = () => {
   return (
@@ -10,7 +10,7 @@ const App = () => {
       <main className="flex-1">
         <Routes>
           <Route path="/" element={<SymbolBrowser />} />
-          <Route path="/inference" element={<InferenceStub />} />
+          <Route path="/inference" element={<Inference />} />
         </Routes>
       </main>
     </div>

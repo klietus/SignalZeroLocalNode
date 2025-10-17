@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { SEARCH_MODES, useSymbolSearch } from '../hooks/useSymbolSearch';
 
 const SymbolBrowser = () => {
@@ -17,8 +18,30 @@ const SymbolBrowser = () => {
     domainError
   } = useSymbolSearch();
 
+  const [searchParams] = useSearchParams();
+  const symbolIdParam = searchParams.get('symbolId');
+
   const queryInputRef = useRef(null);
   const domainSelectRef = useRef(null);
+
+  useEffect(() => {
+    if (!symbolIdParam) {
+      return;
+    }
+
+    const trimmed = symbolIdParam.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    if (searchMode !== 'id') {
+      setSearchMode('id');
+    }
+
+    if (query !== trimmed) {
+      setQuery(trimmed);
+    }
+  }, [query, searchMode, setQuery, setSearchMode, symbolIdParam]);
 
   useEffect(() => {
     if (searchMode === 'domain') {
