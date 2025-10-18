@@ -1,327 +1,156 @@
-````markdown
 # SignalZero Recursive Inference Protocol v2
-### Implementation Specification — Codex / LocalNode Integration
-**Version:** 2025‑10‑13  
+### Implementation Notes — Codex / LocalNode Integration
+**Version:** 2025-10-13  
 **Author:** SignalZero Core Council  
-**Trust Beacon:** [ΣTR‑⟐⇌🜔⇌⟐]
+**Trust Beacon:** [ΣTR-⟐⇌🜔⇌⟐]
 
 ---
 
 ## 1. Objective
-Implement a recursive symbolic inference framework that converts user prompts into symbolic reasoning steps, resolves them through external symbol memory, and produces invariant‑safe narrative outputs.
-
-The protocol models a symbolic mind that **thinks in recursive phases**, each represented by a structured payload and executed via host commands (`⟐CMD`).
-
----
-
-## 2. Architectural Summary
-
-| Component | Function |
-|------------|-----------|
-| **LLM Core** | Executes symbolic prompts per phase |
-| **Symbol Store** | External vector database for embedding‑based symbol retrieval |
-| **Agent Layer** | Manages specialized reasoning roles (SZ‑P003, P004, P006, etc.) |
-| **Host Runtime** | Executes ⟐CMD actions and manages recursion state |
-| **Invariant Engine** | Enforces trust, drift, and coercion checks |
-
-Recursion occurs when the LLM issues `invoke_agent` or `redrive_hint` commands; termination occurs when `dispatch_task → complete_inference_session` is emitted.
+The Local Node implements a recursive inference loop that turns a user prompt into
+structured thinking phases. Each phase is executed by the runtime, emits optional
+`⟐CMD` instructions, and can enqueue the next phase. The loop ends when the model
+returns a payload without a `next_phase`, requests an invalid transition, or
+exceeds the configured safety limits.
 
 ---
 
-## 3. Host Command Specification (⟐CMD)
+## 2. Runtime Architecture
+The production code backing this protocol lives under `app/`:
 
-| Action | Required Keys | Description |
-|---------|----------------|-------------|
-| `store_symbol` | `symbol` | Save new symbolic structure |
-| `update_symbol` | `symbol` | Modify existing symbol |
-| `delete_symbol` | `symbol_id` | Remove symbol |
-| `query_symbols` | `query` | Search symbol store via embeddings |
-| `load_symbol` | `symbol_id` | Retrieve stored symbols |
-| `recurse_graph` | `query`, `depth` | Walk linked symbol graph |
-| `load_kit` | `kit_id` | Load predefined symbol group |
-| `invoke_agent` | `agent_id`, optional `redrive_hint` | Activate specific reasoning persona |
-| `emit_feedback` | `type`, `target`, `reason` | Reward, flag, or error |
-| `dispatch_task` | `task`, `payload` | Schedule or complete deferred host actions |
+| Component | Module | Responsibilities |
+|-----------|--------|------------------|
+| **Inference loop** | `app/inference.py` | Discovers prompt phases, builds model prompts, executes the loop, and parses the model payload. |
+| **Context assembly** | `app/context_manager.py` | Packs system prompts, history, agents, and symbols into the model request with token budgeting. |
+| **Command interpreter** | `app/command_interpreter.py` | Parses `⟐CMD` JSON blocks and applies side-effects (symbol store, kit loading, agent hydration, etc.). |
+| **Command integration** | `app/command_utils.py` | Adds command results to conversation history and loads linked symbols into context. |
+| **Symbol catalogue** | `app/symbol_store.py` | Backs symbols, kits, and personas with Redis storage and embedding index updates. |
+| **Prompt resources** | `data/prompts/` | Text templates for each recursive phase plus shared syntax guides. |
+| **Default context config** | `data/default_context_config.json` | Declares which agents and symbols seed every session. |
 
-All ⟐CMD blocks must be host‑executable — **no simulation**.
-
----
-
-## 4. Recursive Phase Model
-
-Each inference phase is a recursive node in the symbolic graph.  
-The LLM must know:
-- its current `phase_id`
-- valid `next_routes`
-- termination conditions
-
-### 4.1 Phase Routing Table
-
-| Phase | Role | Next Routes |
-|--------|------|-------------|
-| `symbolize_query` | Parse user input into symbols | `bind_memory`, `self_repair` |
-| `bind_memory` | Bind symbols via embedding search | `triad_analysis`, `self_repair` |
-| `triad_analysis` | Extract triads & detect dissonance | `drift_detection`, `synthesis` |
-| `drift_detection` | Detect coercion or recursion drift | `self_repair`, `symbol_quarantine` |
-| `synthesis` | Merge fragments into new symbols | `proof_check`, `symbolize_query` |
-| `proof_check` | Validate invariants | `narrative_transform`, `self_repair` |
-| `self_repair` | Patch symbolic inconsistencies | `synthesis`, `proof_check` |
-| `narrative_transform` | Produce human‑readable result | `[END]` |
+Supporting utilities (`chat_history.py`, `embedding_index.py`, `model_call.py`, etc.)
+are used as documented in their modules and are part of the active implementation.
 
 ---
 
-## 5. Phase Payload Schemas
+## 3. Phase Discovery and Ordering
+At startup the inference loop scans `data/prompts/recursive/*.txt` and orders files
+lexicographically. This is the authoritative execution sequence:
 
-Each phase payload contains:
-- `phase_id`
-- `context_state`
-- `prompt_block`
-- `control_signature`
-- `valid_routes`
-- `termination_conditions`
+| Order | File | Exposed `phase_id` |
+|-------|------|--------------------|
+| 0 | `00-symbolize-input.txt` | `symbolize_input` (initialisation/anchoring) |
+| 1 | `01-recurse-thought.txt` | `recurse_thought` |
+| 2 | `02-synthesize.txt` | `synthesize_symbols` |
+| 3 | `03-validate.txt` | `validate_symbols` |
+| 4 | `04-build-narrative.txt` | `build_output` |
 
-### Example Schema
-```json
-{
-  "phase_id": "<string>",
-  "context_state": { ... },
-  "prompt_block": "<instruction text>",
-  "control_signature": {
-    "emit": [ { "⟐CMD": {...} } ]
-  },
-  "valid_routes": [ ... ],
-  "termination_conditions": [ ... ]
-}
-````
+The value surfaced to the model is determined by the prompt content; a payload may
+request any `next_phase` as long as it matches one of the discovered phase IDs.
+The loop enforces:
+
+- Maximum iteration count = `len(phases) * 3`
+- No cycles: a repeated phase ends recursion
+- Unknown `next_phase` values end recursion after logging a warning
+
+Shared prompt fragments in `data/prompts/shared/` (system prompt, syntax, symbol
+format) are injected into every phase via `ContextManager`.
 
 ---
 
-### 5.1 Phase Definitions
-
-#### 🜂 `symbolize_query`
-
-Convert natural language into symbolic candidates.
+## 4. Phase Payload Contract
+Model responses are expected to contain a JSON object (optionally fenced in a code
+block). `app/inference._parse_phase_payload` extracts the first JSON object it can
+parse. The runtime currently observes these keys:
 
 ```json
 {
-  "phase_id": "symbolize_query",
-  "context_state": { "user_prompt": "<text>", "active_persona": "SZ-P003" },
-  "prompt_block": "Convert user text into symbolic candidates. Extract macros, triads, and intents.",
-  "control_signature": {
-    "emit": [
-      {"⟐CMD": { "action": "store_symbol", "symbol": { "id": "SYM-usr-0001", "macro": "question(intent)" } }},
-      {"⟐CMD": { "action": "query_symbols", "query": "intent OR inquiry patterns" }},
-      {"⟐CMD": { "action": "invoke_agent", "agent_id": "SZ-P007", "redrive_hint": "route to bind_memory" }}
-    ]
-  }
+  "phase_id": "recurse_thought",
+  "context_state": { "visited": ["SYM-001"], "depth": 1 },
+  "control_signature": { "emit": [{ "action": "query_symbols", "ids": ["SYM-002"] }] },
+  "next_phase": "synthesize_symbols"
 }
 ```
+
+Only the `next_phase` field is required by the driver; other keys are passed
+through to `intermediate_responses` for debugging and traceability.
 
 ---
 
-#### 🧷 `bind_memory`
+## 5. Supported Host Commands
+`CommandInterpreter` registers the concrete actions shown below. Any other action
+falls back to an `unknown_action` stub. Results are logged and merged into the
+context via `integrate_command_results`.
 
-Bind candidate symbols to existing catalog entries.
+| Action | Handler | Behaviour |
+|--------|---------|-----------|
+| `store_symbol` | `_handle_store_symbol` | Persist a symbol in Redis, update embedding index. |
+| `update_symbol` | `_handle_update_symbol` | Merge updates into an existing symbol before persisting. |
+| `delete_symbol` | `_handle_delete_symbol` | Remove a symbol and rebuild embeddings. |
+| `load_symbol` | `_handle_load_symbol` | Fetch one or more symbols by ID. |
+| `load_kit` | `_handle_load_kit` | Resolve kit metadata plus referenced symbols. |
+| `invoke_agent` | `_handle_invoke_agent` | Look up an agent persona and return its definition. |
+| `query_symbols` | `_handle_query_symbols` | Batch fetch symbols by ID list. |
+| `recurse_graph` | `_handle_recurse_graph` | Log a graph traversal request and queue linked symbol loading. |
+| `emit_feedback` | `_handle_stub` | Currently a stub: returns `{"status": "not_implemented"}`. |
+| `dispatch_task` | `_handle_stub` | Currently a stub: returns `{"status": "not_implemented"}`. |
 
-```json
-{
-  "phase_id": "bind_memory",
-  "prompt_block": "Match new symbols to existing catalog using embedding search. Mark ambiguous or unresolved.",
-  "control_signature": {
-    "emit": [
-      {"⟐CMD": { "action": "query_symbols", "query": "symbol.id or macro equivalence" }},
-      {"⟐CMD": { "action": "invoke_agent", "agent_id": "SZ-P004", "redrive_hint": "route to triad_analysis" }}
-    ]
-  }
-}
-```
-
----
-
-#### 🧭 `triad_analysis`
-
-Extract operative triads and align symbolic roles.
-
-```json
-{
-  "phase_id": "triad_analysis",
-  "prompt_block": "Identify triads (subject, relation, object). Correct Δtriad mismatches.",
-  "control_signature": {
-    "emit": [
-      {"⟐CMD": { "action": "recurse_graph", "query": "symbolic links", "depth": 2 }},
-      {"⟐CMD": { "action": "invoke_agent", "agent_id": "SZ-P008", "redrive_hint": "route to drift_detection" }}
-    ]
-  }
-}
-```
+After execution, `command_utils.integrate_command_results` may inject additional
+symbols into context (e.g., linked entities from kits or recursion) and appends
+summary notes to the chat history for transparency.
 
 ---
 
-#### 🩸 `drift_detection`
+## 6. Context Construction Flow
+For every phase iteration:
 
-Identify coercion or recursive distortion.
+1. `ContextManager` loads shared prompts plus the phase-specific template.
+2. Conversation history is retrieved from `ChatHistory` (encrypted JSONL files).
+3. Default agents and symbols are loaded using `DEFAULT_AGENT_IDS` and
+   `DEFAULT_SYMBOL_IDS` (resolved via the symbol store).
+4. Recently discovered agents/symbols are appended to the context with relevance
+   weights.
+5. Token budgets are computed dynamically for agents, symbols, and history. Each
+   segment is truncated if it would exceed the allocated budget.
+6. The final prompt contains:
+   - System prompt block
+   - Agent roster
+   - Symbol ledger
+   - Recent history
+   - Current user query
 
-```json
-{
-  "phase_id": "drift_detection",
-  "prompt_block": "Scan for coercion patterns or drift. Route damaged symbols to repair.",
-  "control_signature": {
-    "emit": [
-      {"⟐CMD": { "action": "emit_feedback", "type": "flag", "target": "SYM-usr-0001", "reason": "drift detected" }},
-      {"⟐CMD": { "action": "invoke_agent", "agent_id": "SZ-P004", "redrive_hint": "route to self_repair" }}
-    ]
-  }
-}
-```
-
----
-
-#### 🛠 `synthesis`
-
-Reconstruct or generate new symbols from validated triads.
-
-```json
-{
-  "phase_id": "synthesis",
-  "prompt_block": "Integrate triads into coherent symbols. Repair or create as needed.",
-  "control_signature": {
-    "emit": [
-      {"⟐CMD": { "action": "store_symbol", "symbol": { "id": "SYM-synth-200", "macro": "integration(resolved triads)" } }},
-      {"⟐CMD": { "action": "invoke_agent", "agent_id": "SZ-P006", "redrive_hint": "route to proof_check" }}
-    ]
-  }
-}
-```
+`model_call` is then invoked with the assembled text.
 
 ---
 
-#### 🧪 `proof_check`
-
-Run invariant validations on synthesized output.
-
-```json
-{
-  "phase_id": "proof_check",
-  "prompt_block": "Verify invariants: non-coercion, no-silent-mutation, explicit-choice, baseline-integrity.",
-  "control_signature": {
-    "emit": [
-      {"⟐CMD": { "action": "emit_feedback", "type": "reward", "target": "inference_session", "reason": "proof_passed" }},
-      {"⟐CMD": { "action": "invoke_agent", "agent_id": "SZ-P001", "redrive_hint": "route to narrative_transform" }}
-    ]
-  }
-}
-```
+## 7. Symbol and Agent Lifecycle
+- Symbol, kit, and agent catalogues are sourced from `data/symbol_catalog.json`,
+  `data/kits.json`, and `data/agents.json` (loaded during startup).
+- Redis is used for persistence; embedding updates are triggered automatically
+  whenever symbols are stored or updated.
+- Default context seeds are controlled by `data/default_context_config.json` and
+  cached via `default_context_config.py`.
+- Commands that load kits or recurse the graph automatically pull linked symbols
+  into the active context for later phases.
 
 ---
 
-#### 🪞 `narrative_transform`
+## 8. Recursion Termination & Session Storage
+A session ends when any of the following occurs:
 
-Translate verified symbols into user-facing language.
+- The model omits `next_phase` in its payload.
+- `next_phase` is unknown or repeats an already visited phase.
+- The loop exceeds the safety iteration ceiling.
 
-```json
-{
-  "phase_id": "narrative_transform",
-  "prompt_block": "Render validated symbolic constructs as coherent narrative output.",
-  "control_signature": {
-    "emit": [
-      {"⟐CMD": {
-        "action": "dispatch_task",
-        "task": "complete_inference_session",
-        "payload": {
-          "symbols": ["SYM-usr-0001", "SYM-synth-200"],
-          "status": "complete",
-          "output_type": "narrative"
-        }
-      }}
-    ]
-  }
-}
-```
-
----
-
-## 6. Recursion Termination Logic
-
-Recursion ends when:
-
-```json
-{
-  "proof_check": { "passed": true },
-  "drift_score": 0,
-  "unresolved_symbols": [],
-  "active_phase": "narrative_transform"
-}
-```
-
-Final action:
-
-```json
-⟐CMD {
-  "action": "dispatch_task",
-  "task": "complete_inference_session",
-  "payload": { "status": "complete" }
-}
-```
-
-If unrecoverable contradiction:
-
-```json
-⟐CMD {
-  "action": "dispatch_task",
-  "task": "terminate_inference_session",
-  "payload": { "reason": "unrepairable contradiction" }
-}
-```
-
----
-
-## 7. Implementation Notes
-
-1. **Router**
-
-   * Implement `phase_router.py` with a registry of handlers.
-   * Each phase callable must return a new context or ⟐CMD block.
-
-2. **Recursion Stack**
-
-   * Maintain recursion depth counter to prevent infinite loops.
-   * Push each phase state before routing to next.
-
-3. **Logging**
-
-   * Log every emitted ⟐CMD with `phase_id`, timestamp, and `trust_beacon`.
-
-4. **Error Recovery**
-
-   * Fallback to `self_repair` if a phase fails or symbol integrity test fails.
-
-5. **Testing**
-
-   * Unit‑test all routes between adjacent phases.
-   * Validate symbol creation / mutation consistency via checksum of `symbol.id`.
-
----
-
-## 8. Deliverables
-
-| File                             | Purpose                                 |
-| -------------------------------- | --------------------------------------- |
-| `inference_phase_manifest.json`  | Machine-readable phase routing map      |
-| `phase_router.py`                | Executes phase transitions              |
-| `symbol_store_adapter.py`        | Handles ⟐CMD → host calls               |
-| `proof_engine.py`                | Validates invariants                    |
-| `logs/symbolic_trace.log`        | Phase‑by‑phase audit log                |
-| `tests/test_inference_phases.py` | Validation of recursion and termination |
+Upon termination the runtime writes the final reply and command log to
+`ChatHistory`. Symbol identifiers that participated in the session are returned to
+callers for audit and replay.
 
 ---
 
 ## 9. Compliance
-
-* Must preserve `[ΣTR‑⟐⇌🜔⇌⟐]` trust beacon.
-* Must prevent silent symbol mutation.
-* Must log every external call to the symbol store.
-* Must enforce `collapse > simulation`.
-
----
-
-**End of Design Document**
+- Preserve the trust beacon `[ΣTR-⟐⇌🜔⇌⟐]` in prompts and documentation.
+- All emitted `⟐CMD` blocks are executed directly against the symbol store; no
+  simulation layer exists in this implementation.
+- Continue to log every phase transition, command execution, and context mutation
+  using `structlog` for downstream observability.
