@@ -36,7 +36,7 @@ def test_parse_and_execute(monkeypatch):
 
     payload = """
     Thoughtful reply.
-    ⟐CMD {"action": "store_symbol", "symbol": {"id": "S1", "macro": "macro"}}
+    ⟐CMD {"action": "store_symbol", "symbol": {"id": "S1", "macro": "macro", "status": "validated"}}
     ⟐CMD {"action": "load_symbol", "ids": ["S1"]}
     ⟐CMD {"action": "load_kit", "kit": "kit-1"}
     ⟐CMD {"action": "invoke_agent", "agent_id": "agent-1"}
@@ -65,3 +65,28 @@ def test_parse_and_execute(monkeypatch):
     assert [symbol.id for symbol in results[4]["result"]] == ["S1"]
     assert results[6]["result"]["status"] == "queued"
     assert results[6]["payload"]["depth"] == 2
+
+
+def test_store_symbol_rejected_without_validated_trait(monkeypatch):
+    stored_symbols = {}
+
+    def fake_put(symbol_id, symbol):
+        stored_symbols[symbol_id] = symbol
+
+    monkeypatch.setattr(command_interpreter.symbol_store, "put_symbol", fake_put)
+
+    payload = """
+    ⟐CMD {"action": "store_symbol", "symbol": {"id": "S2", "macro": "macro"}}
+    """
+
+    interpreter = CommandInterpreter()
+    results = interpreter.run(payload)
+
+    assert stored_symbols == {}
+    assert results == [
+        {
+            "action": "store_symbol",
+            "result": {"status": "rejected", "reason": "missing_validated_trait"},
+            "payload": {"action": "store_symbol", "symbol": {"id": "S2", "macro": "macro"}},
+        }
+    ]
