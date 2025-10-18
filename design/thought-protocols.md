@@ -37,13 +37,13 @@ are used as documented in their modules and are part of the active implementatio
 At startup the inference loop scans `data/prompts/recursive/*.txt` and orders files
 lexicographically. This is the authoritative execution sequence:
 
-| Order | File | Exposed `phase_id` |
+| Order | File | Explanation |
 |-------|------|--------------------|
-| 0 | `00-symbolize-input.txt` | `symbolize_input` (initialisation/anchoring) |
-| 1 | `01-recurse-thought.txt` | `recurse_thought` |
-| 2 | `02-synthesize.txt` | `synthesize_symbols` |
-| 3 | `03-validate.txt` | `validate_symbols` |
-| 4 | `04-build-narrative.txt` | `build_output` |
+| 0 | `00-symbolize-input.txt` | `symbolize_input` | (initialisation/anchoring)
+| 1 | `01-recurse-thought.txt` | `recurse_thought` | (recursive thinking)
+| 2 | `02-synthesize.txt` | `synthesize_symbols` | (new symbol sythensis)
+| 3 | `03-validate.txt` | `validate_symbols` | (validation of invariants)
+| 4 | `04-build-narrative.txt` | `build_output` | (build narrative for user)
 
 The value surfaced to the model is determined by the prompt content; a payload may
 request any `next_phase` as long as it matches one of the discovered phase IDs.
