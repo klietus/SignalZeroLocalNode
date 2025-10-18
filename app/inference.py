@@ -1,7 +1,10 @@
 """Inference orchestration utilities."""
 
+from __future__ import annotations
+
+import json
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 import structlog
 
@@ -13,7 +16,7 @@ from app.context_manager import ContextManager
 from app.logging_config import configure_logging
 from app.model_call import model_call
 from app.symbol_store import get_symbol, get_agent
-from app.types import AgentPersona, Symbol
+from app.domain_types import AgentPersona, Symbol
 from app.default_context_config import DEFAULT_AGENT_IDS, DEFAULT_SYMBOL_IDS
 
 
@@ -35,13 +38,17 @@ def load_prompt_phase(phase_id: str, workflow: str = "user") -> str:
     )
     return content
 
-WORKFLOW_PHASES = [
-    ("00-symbolize-input", "recursive"),
-    ("01-recurse-thought", "recursive"),
-    ("02-synthesize", "recursive"),
-    ("03-validate", "recursive"),
-    ("04-build-output", "recursive")
-]
+def _discover_workflow_phases() -> List[Tuple[str, str]]:
+    recursive_dir = Path("data/prompts/recursive")
+    if not recursive_dir.exists():
+        return []
+    phases: List[Tuple[str, str]] = []
+    for prompt_file in sorted(recursive_dir.glob("*.txt")):
+        phases.append((prompt_file.stem, "recursive"))
+    return phases
+
+
+WORKFLOW_PHASES = _discover_workflow_phases()
 
 def run_query(user_query: str, session_id: str, k: int = 5) -> dict:
     chat_history = ChatHistory()
@@ -82,12 +89,33 @@ def run_query(user_query: str, session_id: str, k: int = 5) -> dict:
     handler_count = getattr(interpreter, "handler_count", None)
     log.debug("inference.interpreter_ready", handlers=handler_count)
 
-    for phase_id, workflow in WORKFLOW_PHASES:
+    phase_lookup: Dict[str, str] = {phase_id: workflow for phase_id, workflow in WORKFLOW_PHASES}
+    if not phase_lookup:
+        log.error("inference.no_workflow_phases")
+        raise RuntimeError("No workflow phases are configured")
+
+    phase_sequence = [phase for phase, _ in WORKFLOW_PHASES]
+    current_phase = phase_sequence[0]
+    max_iterations = max(len(phase_sequence), 1) * 3
+    visited_phases: set[str] = set()
+    intermediate_responses: List[Dict[str, Any]] = []
+
+    iteration = 0
+    while current_phase:
+        iteration += 1
+        if iteration > max_iterations:
+            log.warning(
+                "inference.phase_iteration_limit", current_phase=current_phase, limit=max_iterations
+            )
+            break
+
+        workflow = phase_lookup[current_phase]
+        visited_phases.add(current_phase)
         ctx = ContextManager()
         ctx.add_system_prompt(load_prompt_phase("system_prompt", "shared"))
         ctx.add_system_prompt(load_prompt_phase("thought_syntax", "shared"))
         ctx.add_system_prompt(load_prompt_phase("symbol_format", "shared"))
-        ctx.add_system_prompt(load_prompt_phase(phase_id, workflow))
+        ctx.add_system_prompt(load_prompt_phase(current_phase, workflow))
 
         # Inject recent messages and symbols
         for role, content in chat_turns + accumulated_history:
@@ -105,7 +133,7 @@ def run_query(user_query: str, session_id: str, k: int = 5) -> dict:
         log.debug("inference.phase_reply", reply_text=reply_text)
         log.info(
             "inference.phase_completed",
-            phase_id=phase_id,
+            phase_id=current_phase,
             session_id=session_id,
             reply_length=len(reply_text),
         )
@@ -115,7 +143,7 @@ def run_query(user_query: str, session_id: str, k: int = 5) -> dict:
         executed_commands.extend(phase_commands)
         log.debug(
             "inference.commands_executed",
-            phase_id=phase_id,
+            phase_id=current_phase,
             command_count=len(phase_commands),
         )
 
@@ -148,10 +176,42 @@ def run_query(user_query: str, session_id: str, k: int = 5) -> dict:
         )
         for note in command_notes:
             accumulated_history.append(("system", f"[command] {note}"))
+        payload = _parse_phase_payload(reply_text)
+        next_phase = payload.get("next_phase") if isinstance(payload, dict) else None
+        intermediate_entry: Dict[str, Any] = {
+            "phase_id": current_phase,
+            "response": reply_text,
+        }
+        if payload is not None:
+            intermediate_entry["payload"] = payload
+            intermediate_entry["next_phase"] = next_phase
+        intermediate_responses.append(intermediate_entry)
+
         final_reply = reply_text
 
-        log.info("inference.history_appended", session_id=session_id, turns=len(chat_turns))
+        log.info(
+            "inference.history_appended",
+            session_id=session_id,
+            turns=len(chat_turns) + len(accumulated_history),
+        )
 
+        if not next_phase:
+            log.debug("inference.next_phase_missing", current_phase=current_phase)
+            break
+
+        if next_phase not in phase_lookup:
+            log.warning(
+                "inference.next_phase_invalid", current_phase=current_phase, requested=next_phase
+            )
+            break
+
+        if next_phase in visited_phases:
+            log.warning(
+                "inference.next_phase_cycle", current_phase=current_phase, requested=next_phase
+            )
+            break
+
+        current_phase = next_phase
 
     log.info(
         "inference.run_query.completed",
@@ -171,7 +231,46 @@ def run_query(user_query: str, session_id: str, k: int = 5) -> dict:
         "symbols_used": all_symbol_ids,
         "history_length": len(chat_turns) + len(accumulated_history),
         "commands": executed_commands,
+        "intermediate_responses": intermediate_responses,
     }
+
+
+def _parse_phase_payload(text: str) -> Optional[Dict[str, Any]]:
+    """Attempt to parse the model response into a JSON payload."""
+
+    if not text:
+        return None
+
+    candidate = text.strip()
+    if candidate.startswith("```"):
+        lines = candidate.splitlines()
+        # remove opening fence
+        lines = lines[1:]
+        while lines and lines[-1].strip().startswith("```"):
+            lines.pop()
+        candidate = "\n".join(lines).strip()
+
+    def _try_parse(value: str) -> Optional[Dict[str, Any]]:
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return None
+        return parsed if isinstance(parsed, dict) else None
+
+    parsed = _try_parse(candidate)
+    if parsed is not None:
+        return parsed
+
+    brace_start = candidate.find("{")
+    brace_end = candidate.rfind("}")
+    if brace_start != -1 and brace_end != -1 and brace_end > brace_start:
+        snippet = candidate[brace_start : brace_end + 1]
+        parsed = _try_parse(snippet)
+        if parsed is not None:
+            return parsed
+
+    log.debug("inference.payload_parse_failed", sample=candidate[:128])
+    return None
 
 
 def _load_default_agents() -> List[AgentPersona]:

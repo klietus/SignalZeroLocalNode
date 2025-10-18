@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from app import inference, command_utils
@@ -80,14 +82,49 @@ def test_run_query(monkeypatch):
     monkeypatch.setattr(command_utils, "get_symbol", lambda sid: symbols.get(sid))
     agents = {"SZ-P001": AgentPersona(id="SZ-P001", name="Recursive Heart Anchor")}
     monkeypatch.setattr(inference, "get_agent", lambda aid: agents.get(aid))
-    monkeypatch.setattr(inference, "model_call", lambda prompt: f"response for {prompt}")
-    monkeypatch.setattr(inference, "load_prompt_phase", lambda phase_id, workflow="user": f"{workflow}:{phase_id}")
-    monkeypatch.setattr(inference, "WORKFLOW_PHASES", [("phase1", "user"), ("phase2", "user")], raising=False)
+    payload_phase1 = {
+        "phase_id": "phase1",
+        "context_state": {"prompt": "phase1"},
+        "prompt_block": "do something",
+        "control_signature": {
+            "emit": [
+                {"⟐CMD": {"action": "load_symbol", "ids": ["s2"]}},
+            ]
+        },
+        "valid_routes": ["phase2"],
+        "termination_conditions": [],
+        "next_phase": "phase2",
+    }
+    payload_phase2 = {
+        "phase_id": "phase2",
+        "context_state": {"prompt": "phase2"},
+        "prompt_block": "wrap up",
+        "control_signature": {"emit": []},
+        "valid_routes": [],
+        "termination_conditions": ["complete"],
+        "next_phase": None,
+    }
+
+    responses = [json.dumps(payload_phase1), json.dumps(payload_phase2)]
+
+    def fake_model_call(prompt):
+        try:
+            return responses.pop(0)
+        except IndexError:  # pragma: no cover - defensive guard
+            return json.dumps(payload_phase2)
+
+    monkeypatch.setattr(inference, "model_call", fake_model_call)
+    monkeypatch.setattr(
+        inference, "load_prompt_phase", lambda phase_id, workflow="user": f"{workflow}:{phase_id}"
+    )
+    monkeypatch.setattr(
+        inference, "WORKFLOW_PHASES", [("phase1", "user"), ("phase2", "user")], raising=False
+    )
     monkeypatch.setattr(inference, "CommandInterpreter", lambda: interpreter)
 
     result = inference.run_query("what?", "session-1", k=1)
 
-    assert result["reply"].startswith("response for")
+    assert result["reply"] == json.dumps(payload_phase2)
     assert result["symbols_used"] == ["SZ:STB-Signal-Anchor-006", "s1", "s2"]
     assert result["history_length"] == 3
     assert len(result["commands"]) == 1
@@ -95,11 +132,11 @@ def test_run_query(monkeypatch):
         "phase1",
         "phase2",
     ]
+    assert result["intermediate_responses"][0]["next_phase"] == "phase2"
+    assert result["intermediate_responses"][0]["payload"]["phase_id"] == "phase1"
+    assert "payload" in result["intermediate_responses"][1]
     assert result["intermediate_responses"][-1]["response"] == result["reply"]
-    assert interpreter.inputs == [
-        "response for prompt::what?::symbols:2::agents:1",
-        "response for prompt::what?::symbols:3::agents:1",
-    ]
+    assert interpreter.inputs == [json.dumps(payload_phase1), json.dumps(payload_phase2)]
 
     first_ctx, second_ctx = inference.ContextManager.instances[:2]
     assert len(first_ctx.symbols) == 2
