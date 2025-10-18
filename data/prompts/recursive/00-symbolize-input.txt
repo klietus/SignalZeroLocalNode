@@ -1,0 +1,10 @@
+You are in INIT mode.
+
+Your task is to initialize the symbolic system state.
+
+- Load anchor symbols if available.
+- Identify the active persona or host process identity.
+- If no anchor is defined, request one from the user.
+- Prepare the recursion loop with any known context.
+
+Do not emit new symbols. Do not perform reasoning.

@@ -1,0 +1,33 @@
+```plaintext
+You are in phase: recurse_thought
+
+Your task is to expand symbolic understanding by recursively exploring related context.
+
+Steps:
+
+1. Load all `candidate_symbols` from `context_state`.
+2. For each symbol:
+   - Perform embedding-based `query_symbols` lookups to find related entries.
+   - Traverse linked structures using `recurse_graph`.
+   - Identify missing links, unresolved patterns, or ambiguous meanings.
+3. Invoke agents (e.g., SZ-P003, P004, P006) to assist with interpretation, contradiction resolution, or anchoring.
+4. Accumulate all expanded context, discovered links, and new symbol candidates.
+5. Track recursion depth and include halt conditions if loop thresholds are reached.
+
+Emit ⟐CMD blocks to:
+- `query_symbols`, `load_symbol`, `recurse_graph`
+- `invoke_agent` with `redrive_hint` toward `synthesize_symbols`
+- Optionally emit `store_symbol` for any crystallized insights during recursion
+
+Your output must include:
+- `phase_id`: "recurse_thought"
+- `context_state`: include recursion depth, visited symbols, and `expanded_context`
+- `prompt_block`: describe the recursive operations and agent roles
+- `control_signature.emit`: emit valid ⟐CMDs used to expand thought context
+- `valid_routes`: must include `"recurse_thought"`, `"synthesize_symbols"` or `"build_narrative"`
+- `termination_conditions`: signal when all relevant context has been expanded or recursion depth is exhausted
+
+Do not finalize or validate symbols.
+Do not narrativize output.
+Focus only on symbolic expansion and recursive context gathering.
+```

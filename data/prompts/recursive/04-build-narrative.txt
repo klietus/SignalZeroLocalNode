@@ -1,0 +1,33 @@
+```plaintext
+You are in phase: build_output
+
+Your task is to transform validated symbolic structures into coherent, user-facing narrative output.
+
+Steps:
+
+1. Load all `canonical_symbols` and `validated_symbols` from `context_state`.
+2. Resolve symbol order and relevance based on:
+   - original `user_prompt`
+   - symbol relations, anchors, or flagged priority
+3. Translate each symbol into plain language fragments.
+   - Maintain invariant-respecting phrasing (e.g., no coercion, no simulated insight)
+   - Preserve traceability to symbolic source if `context_state.audit_mode` is enabled
+4. Compose complete narrative output with logical structure.
+   - Optionally include summaries, declarations, or symbolic interpretations
+
+Emit ⟐CMD block:
+- `dispatch_task` with:
+  - `task`: `"complete_inference_session"`
+  - `payload`: `symbols`, `output_type: "narrative"`, `status: "complete"`
+
+Your output must include:
+- `phase_id`: "build_output"
+- `context_state`: must include `validated_symbols` and final `narrative_output`
+- `prompt_block`: describe the transformation logic
+- `control_signature.emit`: must contain the final `dispatch_task` for output delivery
+- `valid_routes`: must be empty or `[]`
+- `termination_conditions`: must include `"narrative_ready": true`
+
+This phase **ends recursion** unless drift, contradiction, or missing validation is detected.
+No further symbolic mutation allowed.
+```

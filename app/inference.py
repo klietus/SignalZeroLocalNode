@@ -13,7 +13,7 @@ from app.context_manager import ContextManager
 from app.logging_config import configure_logging
 from app.model_call import model_call
 from app.symbol_store import get_symbol, get_agent
-from app.domain_types import AgentPersona, Symbol
+from app.types import AgentPersona, Symbol
 from app.default_context_config import DEFAULT_AGENT_IDS, DEFAULT_SYMBOL_IDS
 
 
@@ -36,15 +36,11 @@ def load_prompt_phase(phase_id: str, workflow: str = "user") -> str:
     return content
 
 WORKFLOW_PHASES = [
-    ("00-init", "user"),
-    ("01-plan", "user"),
-    ("02-expand", "user"),
-    ("03-observe", "user"),
-    ("04-reason", "user"),
-    ("05-synthesize", "user"),
-    ("06-refine", "user"),
-    ("07-evaluate", "user"),
-    ("08-log", "user")
+    ("00-symbolize-input", "recursive"),
+    ("01-recurse-thought", "recursive"),
+    ("02-synthesize", "recursive"),
+    ("03-validate", "recursive"),
+    ("04-build-output", "recursive")
 ]
 
 def run_query(user_query: str, session_id: str, k: int = 5) -> dict:
@@ -80,7 +76,6 @@ def run_query(user_query: str, session_id: str, k: int = 5) -> dict:
 
     final_reply = None
     accumulated_history = []
-    phase_responses: List[dict] = []
 
     interpreter = CommandInterpreter()
     executed_commands = []
@@ -90,7 +85,7 @@ def run_query(user_query: str, session_id: str, k: int = 5) -> dict:
     for phase_id, workflow in WORKFLOW_PHASES:
         ctx = ContextManager()
         ctx.add_system_prompt(load_prompt_phase("system_prompt", "shared"))
-        ctx.add_system_prompt(load_prompt_phase("command_syntax", "shared"))
+        ctx.add_system_prompt(load_prompt_phase("thought_syntax", "shared"))
         ctx.add_system_prompt(load_prompt_phase("symbol_format", "shared"))
         ctx.add_system_prompt(load_prompt_phase(phase_id, workflow))
 
@@ -109,25 +104,10 @@ def run_query(user_query: str, session_id: str, k: int = 5) -> dict:
         reply_text = model_call(phase_prompt)
         log.debug("inference.phase_reply", reply_text=reply_text)
         log.info(
-            "inference.phase_intermediate",
-            phase_id=phase_id,
-            workflow=workflow,
-            session_id=session_id,
-            response=reply_text,
-        )
-        log.info(
             "inference.phase_completed",
             phase_id=phase_id,
             session_id=session_id,
             reply_length=len(reply_text),
-        )
-
-        phase_responses.append(
-            {
-                "phase_id": phase_id,
-                "workflow": workflow,
-                "response": reply_text,
-            }
         )
 
         # Execute any emitted commands
@@ -179,7 +159,7 @@ def run_query(user_query: str, session_id: str, k: int = 5) -> dict:
         commands=len(executed_commands),
         symbols=len(context_symbols),
     )
-    
+
     chat_history.append_message(session_id, "query", user_query)
     chat_history.append_message(session_id, "assistant", final_reply)
 
@@ -191,7 +171,6 @@ def run_query(user_query: str, session_id: str, k: int = 5) -> dict:
         "symbols_used": all_symbol_ids,
         "history_length": len(chat_turns) + len(accumulated_history),
         "commands": executed_commands,
-        "intermediate_responses": phase_responses,
     }
 
 
