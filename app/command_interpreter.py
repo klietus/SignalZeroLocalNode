@@ -9,6 +9,7 @@ import structlog
 from app import symbol_store
 from app.logging_config import configure_logging
 from app.domain_types import Symbol
+from app.symbol_validation import symbol_has_validated_trait
 
 
 configure_logging()
@@ -83,6 +84,30 @@ class CommandInterpreter:
                 log.warning("command_interpreter.missing_action", payload=payload)
                 continue
 
+            if action == "store_symbol" and not symbol_has_validated_trait(
+                payload.get("symbol") if isinstance(payload, dict) else None
+            ):
+                symbol_id = None
+                symbol_payload = payload.get("symbol") if isinstance(payload, dict) else None
+                if isinstance(symbol_payload, dict):
+                    symbol_id = symbol_payload.get("id")
+                log.warning(
+                    "command_interpreter.store_symbol_rejected",
+                    reason="missing_validated_trait",
+                    symbol_id=symbol_id,
+                )
+                results.append(
+                    {
+                        "action": action,
+                        "result": {
+                            "status": "rejected",
+                            "reason": "missing_validated_trait",
+                        },
+                        "payload": payload,
+                    }
+                )
+                continue
+
             handler = self._handlers.get(action, self._handle_unknown)
             try:
                 result = handler(payload)
@@ -151,6 +176,13 @@ class CommandInterpreter:
         if not isinstance(symbol_data, dict) or "id" not in symbol_data:
             return {"status": "error", "reason": "invalid_symbol"}
 
+        if not symbol_has_validated_trait(symbol_data):
+            log.warning(
+                "command_interpreter.store_symbol_invalid_trait",
+                symbol_id=symbol_data.get("id"),
+            )
+            return {"status": "rejected", "reason": "missing_validated_trait"}
+
         symbol = Symbol(**symbol_data)
         symbol_store.put_symbol(symbol.id, symbol)
         log.info("command_interpreter.store_symbol", symbol_id=symbol.id)
@@ -165,6 +197,12 @@ class CommandInterpreter:
         base = existing.model_dump() if existing else {}
         base.update(symbol_data)
         updated = Symbol(**base)
+        if not symbol_has_validated_trait(updated):
+            log.warning(
+                "command_interpreter.update_symbol_invalid_trait",
+                symbol_id=updated.id,
+            )
+            return {"status": "rejected", "reason": "missing_validated_trait"}
         symbol_store.put_symbol(updated.id, updated)
         log.info("command_interpreter.update_symbol", symbol_id=updated.id)
         return updated
