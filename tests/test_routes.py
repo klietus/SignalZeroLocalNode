@@ -79,8 +79,26 @@ def test_bulk_put_symbols(monkeypatch):
     assert [s.id for s in calls["symbols"]] == ["s1", "s2"]
 
 
-@pytest.mark.parametrize("path", ["/domains", "/sync/domains"])
-def test_list_domains(client, monkeypatch, path):
+def test_list_local_domains(client, monkeypatch):
+    monkeypatch.setattr(routes.symbol_store, "get_domains", lambda: ["local", "domains"])
+
+    response = client.get("/domains")
+    assert response.status_code == 200
+    assert response.json() == ["local", "domains"]
+
+
+def test_list_local_domains_error(client, monkeypatch):
+    def boom():
+        raise RuntimeError("uh oh")
+
+    monkeypatch.setattr(routes.symbol_store, "get_domains", boom)
+
+    response = client.get("/domains")
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Failed to retrieve local domains"
+
+
+def test_list_external_domains(client, monkeypatch):
     async def fake_to_thread(func, *args, **kwargs):
         return func(*args, **kwargs)
 
@@ -91,13 +109,12 @@ def test_list_domains(client, monkeypatch, path):
         lambda: ["a", "b"],
     )
 
-    response = client.get(path)
+    response = client.get("/external/domains")
     assert response.status_code == 200
     assert response.json() == ["a", "b"]
 
 
-@pytest.mark.parametrize("path", ["/domains", "/sync/domains"])
-def test_list_domains_external_error(client, monkeypatch, path):
+def test_list_external_domains_error(client, monkeypatch):
     async def fake_to_thread(func, *args, **kwargs):
         return func(*args, **kwargs)
 
@@ -108,9 +125,9 @@ def test_list_domains_external_error(client, monkeypatch, path):
 
     monkeypatch.setattr(routes.symbol_sync, "fetch_domains_from_external_store", boom)
 
-    response = client.get(path)
+    response = client.get("/external/domains")
     assert response.status_code == 502
-    assert response.json()["detail"] == "Failed to retrieve domains"
+    assert response.json()["detail"] == "Failed to retrieve external domains"
 
 
 def test_sync_symbols_route_success(client, monkeypatch):

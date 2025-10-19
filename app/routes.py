@@ -26,10 +26,10 @@ async def _fetch_external_domains(event_prefix: str) -> List[str]:
         domains = await asyncio.to_thread(symbol_sync.fetch_domains_from_external_store)
     except symbol_sync.ExternalSymbolStoreError as exc:
         log.error(f"{event_prefix}.external_error", error=str(exc))
-        raise HTTPException(status_code=502, detail="Failed to retrieve domains") from exc
+        raise HTTPException(status_code=502, detail="Failed to retrieve external domains") from exc
     except Exception as exc:  # pragma: no cover - defensive catch for unexpected issues
         log.error(f"{event_prefix}.error", error=str(exc))
-        raise HTTPException(status_code=500, detail="Could not retrieve domain list") from exc
+        raise HTTPException(status_code=500, detail="Could not retrieve external domain list") from exc
 
     log.info(f"{event_prefix}.completed", count=len(domains))
     return domains
@@ -107,12 +107,19 @@ async def bulk_put_symbols(symbols: Annotated[List[Symbol], Body(..., embed=True
 
 @router.get("/domains")
 async def list_domains():
-    return await _fetch_external_domains("routes.list_domains")
+    try:
+        domains = symbol_store.get_domains()
+    except Exception as exc:  # pragma: no cover - defensive catch for unexpected issues
+        log.error("routes.list_domains.error", error=str(exc))
+        raise HTTPException(status_code=500, detail="Failed to retrieve local domains") from exc
+
+    log.info("routes.list_domains.completed", count=len(domains))
+    return domains
 
 
-@router.get("/sync/domains")
-async def list_sync_domains():
-    return await _fetch_external_domains("routes.sync_domains")
+@router.get("/external/domains")
+async def list_external_domains():
+    return await _fetch_external_domains("routes.external_domains")
 
 
 @router.post("/sync/symbols")

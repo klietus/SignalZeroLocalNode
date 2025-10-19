@@ -28,7 +28,7 @@ export default defineConfig(({ mode }) => {
           target: proxyTarget,
           changeOrigin: true
         },
-        '/sync/domains': {
+        '/external/domains': {
           target: proxyTarget,
           changeOrigin: true
         },

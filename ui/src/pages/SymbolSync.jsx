@@ -58,7 +58,7 @@ const SymbolSync = () => {
       setDomainsError(null);
 
       try {
-        const endpoint = buildApiUrl('/sync/domains');
+        const endpoint = buildApiUrl('/external/domains');
         const response = await fetch(endpoint, {
           headers: { Accept: 'application/json' }
         });
@@ -67,7 +67,7 @@ const SymbolSync = () => {
           const errorText = await response.text();
           const message =
             errorText ||
-            `Failed to load domains (status ${response.status}) from ${endpoint}. Ensure the local API exposes /sync/domains.`;
+            `Failed to load domains (status ${response.status}) from ${endpoint}. Ensure the local API exposes /external/domains.`;
           throw new Error(message);
         }
 

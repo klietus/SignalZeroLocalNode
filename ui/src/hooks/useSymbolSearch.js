@@ -65,7 +65,7 @@ export const useSymbolSearch = () => {
   }, []);
 
   const fetchDomains = useCallback(async () => {
-    const response = await fetch(buildApiUrl('/sync/domains'), {
+    const response = await fetch(buildApiUrl('/domains'), {
       headers: {
         Accept: 'application/json'
       }
@@ -75,7 +75,7 @@ export const useSymbolSearch = () => {
       const errorText = await response.text();
       throw new Error(
         errorText ||
-          `Failed to fetch domains: ${response.statusText}. Ensure the local API exposes /sync/domains.`
+          `Failed to fetch domains: ${response.statusText}. Ensure the local API exposes /domains.`
       );
     }
 

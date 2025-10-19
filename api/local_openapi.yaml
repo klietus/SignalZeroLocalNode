@@ -193,10 +193,10 @@ paths:
         "502":
           description: Managed store returned an error during synchronisation.
 
-  /sync/domains:
+  /external/domains:
     get:
       summary: Retrieve symbol domains directly from the managed store
-      operationId: listSyncDomains
+      operationId: listExternalDomains
       responses:
         "200":
           description: List of managed symbol domains
@@ -213,11 +213,11 @@ paths:
 
   /domains:
     get:
-      summary: List all available symbol domains
-      operationId: listDomains
+      summary: List locally cached symbol domains
+      operationId: listLocalDomains
       responses:
         "200":
-          description: List of symbol domains
+          description: List of symbol domains stored in the local cache
           content:
             application/json:
               schema:
