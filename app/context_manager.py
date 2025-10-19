@@ -10,20 +10,9 @@ import tiktoken
 configure_logging()
 log = structlog.get_logger(__name__)
 
-class _FallbackEncoding:
-    def encode(self, text: str) -> list[int]:
-        # Whitespace-delimited fallback to approximate token counting offline.
-        if not text:
-            return []
-        return [len(token.encode("utf-8")) for token in text.split()]
-
 
 def _get_encoder():
-    try:
-        return tiktoken.get_encoding("cl100k_base")
-    except Exception as exc:  # pragma: no cover - exercised in offline test environments
-        log.warning("context_manager.encoder_fallback", error=str(exc))
-        return _FallbackEncoding()
+    return tiktoken.get_encoding("cl100k_base")
 
 
 class ContextManager:
