@@ -19,6 +19,7 @@ class Settings:
     model_api_url: str = "http://localhost:11434/api/generate"
     model_name: str = "deepseek-r1:8b"
     model_num_predict: int = 48
+    model_request_timeout: int = 300
 
     openai_api_key: Optional[str] = None
     openai_model: str = "gpt-4o-mini"
@@ -45,6 +46,9 @@ class Settings:
 
         if (value := os.getenv("MODEL_NUM_PREDICT")) is not None:
             data["model_num_predict"] = int(value)
+
+        if (value := os.getenv("MODEL_REQUEST_TIMEOUT")) is not None:
+            data["model_request_timeout"] = int(value)
 
         if (value := os.getenv("OPENAI_TEMPERATURE")) is not None:
             data["openai_temperature"] = float(value)

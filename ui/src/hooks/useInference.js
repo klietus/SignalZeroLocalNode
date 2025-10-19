@@ -101,7 +101,18 @@ export const useInference = () => {
 
         if (!response.ok) {
           const errorText = await response.text();
-          throw new Error(errorText || `Inference failed: ${response.status} ${response.statusText}`);
+          let message = errorText;
+          try {
+            const parsed = JSON.parse(errorText);
+            if (parsed && typeof parsed === 'object' && parsed.detail) {
+              message = parsed.detail;
+            }
+          } catch (parseError) {
+            // Ignore JSON parsing errors and fall back to the raw message
+          }
+
+          const fallbackMessage = `Inference failed: ${response.status} ${response.statusText}`;
+          throw new Error((message && message.trim()) || fallbackMessage);
         }
 
         const payload = await response.json();
