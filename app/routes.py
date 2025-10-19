@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from app import symbol_store
 from app.inference import run_query
+from app.model_call import ModelCallTimeoutError
 from app.logging_config import configure_logging
 from app.symbol_store import Symbol
 
@@ -30,7 +31,26 @@ async def query_inference(request: QueryRequest):
         session_id=request.session_id,
         query_length=len(request.query),
     )
-    result = run_query(request.query, request.session_id)
+    try:
+        result = run_query(request.query, request.session_id)
+    except ModelCallTimeoutError as exc:
+        log.error(
+            "routes.query_inference.timeout",
+            session_id=request.session_id,
+            error=str(exc),
+        )
+        raise HTTPException(status_code=504, detail=str(exc)) from exc
+    except Exception as exc:  # pragma: no cover - defensive logging
+        log.exception(
+            "routes.query_inference.error",
+            session_id=request.session_id,
+            error=str(exc),
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Inference failed. Check server logs for details.",
+        ) from exc
+
     log.info("routes.query_inference.completed", symbols=len(result.get("symbols_used", [])))
     return result
 

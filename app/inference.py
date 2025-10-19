@@ -14,7 +14,7 @@ from app.command_interpreter import CommandInterpreter
 from app.command_utils import integrate_command_results
 from app.context_manager import ContextManager
 from app.logging_config import configure_logging
-from app.model_call import model_call
+from app.model_call import ModelCallTimeoutError, model_call
 from app.symbol_store import get_symbol, get_agent
 from app.domain_types import AgentPersona, Symbol
 from app.default_context_config import DEFAULT_AGENT_IDS, DEFAULT_SYMBOL_IDS
@@ -127,7 +127,16 @@ def run_query(user_query: str, session_id: str, k: int = 5) -> dict:
 
         phase_prompt = ctx.build_prompt(user_query)
         log.debug("inference.phase_prompt", phase_prompt=phase_prompt)
-        reply_text = model_call(phase_prompt)
+        try:
+            reply_text = model_call(phase_prompt)
+        except ModelCallTimeoutError as exc:
+            log.error(
+                "inference.model_timeout",
+                session_id=session_id,
+                phase_id=current_phase,
+                error=str(exc),
+            )
+            raise
         log.debug("inference.phase_reply", reply_text=reply_text)
         log.info(
             "inference.phase_completed",

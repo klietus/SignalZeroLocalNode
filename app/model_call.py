@@ -16,6 +16,10 @@ log = structlog.get_logger(__name__)
 settings = get_settings()
 _openai_client: Optional[Any] = None
 
+
+class ModelCallTimeoutError(RuntimeError):
+    """Raised when a model invocation exceeds the configured timeout."""
+
 if settings.model_provider == "openai":
     try:
         from openai import OpenAI
@@ -44,7 +48,21 @@ def _call_local_model(prompt: str) -> str:
         model=settings.model_name,
     )
 
-    response = requests.post(settings.model_api_url, json=payload, timeout=300)
+    try:
+        response = requests.post(
+            settings.model_api_url,
+            json=payload,
+            timeout=settings.model_request_timeout,
+        )
+    except requests.exceptions.Timeout as exc:
+        log.error(
+            "model_call.local.timeout",
+            url=settings.model_api_url,
+            timeout=settings.model_request_timeout,
+        )
+        raise ModelCallTimeoutError(
+            f"Model API request timed out after {settings.model_request_timeout} seconds"
+        ) from exc
     if response.status_code != 200:
         log.error(
             "model_call.local.error",
