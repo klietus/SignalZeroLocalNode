@@ -80,7 +80,8 @@ The response summarises the run:
 }
 ```
 
-You can repeat the sync call to stay aligned with the managed store or build it into a scheduled job.
+You can repeat the sync call to stay aligned with the managed store or build it into a scheduled job. If you prefer a visual
+workflow, open the web UI and navigate to **Symbol Sync** to launch runs and review metrics interactively.
 
 Set `MODEL_PROVIDER=openai` together with the relevant OpenAI environment variables to call OpenAI-hosted models. Leave the provider at its default `local` value to continue using a self-hosted model endpoint.
 

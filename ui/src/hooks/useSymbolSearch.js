@@ -1,14 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { buildApiUrl } from '../utils/api';
+
 export const SEARCH_MODES = ['id', 'domain', 'tag'];
 
 const DEFAULT_RESULT_LIMIT = 20;
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
-
-const buildUrl = (path, params) => {
-  const query = params && params.toString();
-  return `${API_BASE_URL}${path}${query ? `?${query}` : ''}`;
-};
 
 export const useSymbolSearch = () => {
   const [searchMode, rawSetSearchMode] = useState('id');
@@ -33,7 +29,7 @@ export const useSymbolSearch = () => {
       return null;
     }
 
-    const response = await fetch(buildUrl(`/symbol/${encodeURIComponent(trimmed)}`), {
+    const response = await fetch(buildApiUrl(`/symbol/${encodeURIComponent(trimmed)}`), {
       headers: {
         Accept: 'application/json'
       }
@@ -54,7 +50,7 @@ export const useSymbolSearch = () => {
   }, []);
 
   const fetchSymbolList = useCallback(async (params) => {
-    const response = await fetch(buildUrl('/symbols', params), {
+    const response = await fetch(buildApiUrl('/symbols', params), {
       headers: {
         Accept: 'application/json'
       }
@@ -69,7 +65,7 @@ export const useSymbolSearch = () => {
   }, []);
 
   const fetchDomains = useCallback(async () => {
-    const response = await fetch(buildUrl('/domains'), {
+    const response = await fetch(buildApiUrl('/domains'), {
       headers: {
         Accept: 'application/json'
       }
