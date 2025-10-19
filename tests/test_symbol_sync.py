@@ -35,6 +35,8 @@ def test_sync_symbols_success(mock_store):
     calls = {"index": 0}
 
     def handler(request):
+        assert request.url.path == "/symbol"
+        assert request.url.params.get("symbol_domain") == "root"
         index = calls["index"]
         calls["index"] += 1
         if index < len(pages):
@@ -48,7 +50,9 @@ def test_sync_symbols_success(mock_store):
     with symbol_sync.ExternalSymbolStoreClient(
         "https://example.com", transport=transport
     ) as client:
-        result = symbol_sync.sync_symbols_from_external_store(limit=2, client=client)
+        result = symbol_sync.sync_symbols_from_external_store(
+            limit=2, client=client, symbol_domain="root"
+        )
 
     assert result.fetched == 3
     assert result.stored == 3
@@ -68,6 +72,8 @@ def test_sync_symbols_cursor_url(mock_store):
     calls = {"index": 0}
 
     def handler(request):
+        assert request.url.path == "/symbol"
+        assert request.url.params.get("symbol_domain") == "root"
         call_index = calls["index"]
         calls["index"] += 1
         query_text = request.url.query.decode()
@@ -88,13 +94,51 @@ def test_sync_symbols_cursor_url(mock_store):
     with symbol_sync.ExternalSymbolStoreClient(
         "https://example.com", transport=transport
     ) as client:
-        result = symbol_sync.sync_symbols_from_external_store(limit=7, client=client)
+        result = symbol_sync.sync_symbols_from_external_store(
+            limit=7, client=client, symbol_domain="root"
+        )
 
     assert result.fetched == 2
     assert result.stored == 2
     assert result.new == 2
     assert result.updated == 0
     assert result.pages == 2
+
+
+def test_sync_symbols_all_domains(mock_store):
+    domain_pages = {
+        "root": [[{"id": "root-1"}], []],
+        "diagnostics": [[{"id": "diag-1"}], []],
+    }
+
+    call_counts = {key: 0 for key in domain_pages}
+
+    def handler(request):
+        if request.url.path == "/domains":
+            return httpx.Response(200, json=list(domain_pages.keys()))
+
+        assert request.url.path == "/symbol"
+        domain = request.url.params.get("symbol_domain")
+        assert domain in domain_pages
+        call_index = call_counts[domain]
+        call_counts[domain] += 1
+        payloads = domain_pages[domain]
+        payload = payloads[call_index] if call_index < len(payloads) else []
+        return httpx.Response(200, json={"symbols": payload})
+
+    transport = httpx.MockTransport(handler)
+
+    with symbol_sync.ExternalSymbolStoreClient(
+        "https://example.com", transport=transport
+    ) as client:
+        result = symbol_sync.sync_symbols_from_external_store(limit=5, client=client)
+
+    assert result.fetched == 2
+    assert result.stored == 2
+    assert result.new == 2
+    assert result.updated == 0
+    assert result.pages == 2
+    assert mock_store == [["root-1"], ["diag-1"]]
 
 
 def test_sync_symbols_http_error(monkeypatch):

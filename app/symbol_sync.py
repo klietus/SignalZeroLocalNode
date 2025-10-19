@@ -242,7 +242,10 @@ def sync_symbols_from_external_store(
     if limit <= 0:
         raise ValueError("limit must be greater than zero")
 
-    limit = min(limit, 20)
+    page_limit = min(limit, 20)
+
+    normalized_domain = (symbol_domain or "").strip() or None
+    normalized_tag = (symbol_tag or "").strip() or None
 
     settings = get_settings()
     owns_client = False
@@ -253,51 +256,72 @@ def sync_symbols_from_external_store(
         owns_client = True
 
     result = SyncResult()
-    last_symbol_id: Optional[str] = None
-
-    current_limit = limit
 
     try:
-        while True:
-            page = client.query_symbols(
-                symbol_domain=symbol_domain,
-                symbol_tag=symbol_tag,
-                last_symbol_id=last_symbol_id,
+        if normalized_domain is not None:
+            domains_to_sync: List[str] = [normalized_domain]
+        else:
+            domains = client.list_domains()
+            domains_to_sync = [domain for domain in domains if isinstance(domain, str) and domain.strip()]
+
+        if not domains_to_sync:
+            log.info("symbol_sync.no_domains", tag=normalized_tag)
+            return result
+
+        for active_domain in domains_to_sync:
+            last_symbol_id: Optional[str] = None
+            current_limit = page_limit
+
+            log.debug(
+                "symbol_sync.sync_domain.begin",
+                domain=active_domain,
+                tag=normalized_tag,
                 limit=current_limit,
             )
-            batch = page.symbols
 
-            if not batch:
-                break
+            while True:
+                page = client.query_symbols(
+                    symbol_domain=active_domain,
+                    symbol_tag=normalized_tag,
+                    last_symbol_id=last_symbol_id,
+                    limit=current_limit,
+                )
+                batch = page.symbols
 
-            result.pages += 1
-            result.fetched += len(batch)
+                if not batch:
+                    log.debug("symbol_sync.sync_domain.empty_batch", domain=active_domain)
+                    break
 
-            ids = [symbol.id for symbol in batch]
-            existing_symbols = symbol_store.get_symbols_by_ids(ids)
-            existing_ids = {symbol.id for symbol in existing_symbols}
+                result.pages += 1
+                result.fetched += len(batch)
 
-            new_count = sum(1 for symbol_id in ids if symbol_id not in existing_ids)
-            result.new += new_count
-            result.updated += len(ids) - new_count
+                ids = [symbol.id for symbol in batch]
+                existing_symbols = symbol_store.get_symbols_by_ids(ids)
+                existing_ids = {symbol.id for symbol in existing_symbols}
 
-            symbol_store.put_symbols_bulk(batch)
-            result.stored += len(batch)
+                new_count = sum(1 for symbol_id in ids if symbol_id not in existing_ids)
+                result.new += new_count
+                result.updated += len(ids) - new_count
 
-            next_cursor_value, next_limit_override = _decode_cursor(page.next_cursor)
+                symbol_store.put_symbols_bulk(batch)
+                result.stored += len(batch)
 
-            if next_limit_override is not None:
-                current_limit = max(1, min(next_limit_override, 20))
+                next_cursor_value, next_limit_override = _decode_cursor(page.next_cursor)
 
-            if next_cursor_value:
-                last_symbol_id = next_cursor_value
-            elif page.next_cursor:
-                last_symbol_id = page.next_cursor
-            else:
-                last_symbol_id = batch[-1].id
+                if next_limit_override is not None:
+                    current_limit = max(1, min(next_limit_override, 20))
 
-            if len(batch) < current_limit and not page.next_cursor:
-                break
+                if next_cursor_value:
+                    last_symbol_id = next_cursor_value
+                elif page.next_cursor:
+                    last_symbol_id = page.next_cursor
+                else:
+                    last_symbol_id = batch[-1].id
+
+                if len(batch) < current_limit and not page.next_cursor:
+                    break
+
+            log.debug("symbol_sync.sync_domain.complete", domain=active_domain)
     finally:
         if owns_client:
             client.close()
