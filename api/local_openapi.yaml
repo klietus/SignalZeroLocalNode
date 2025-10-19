@@ -193,6 +193,24 @@ paths:
         "502":
           description: Managed store returned an error during synchronisation.
 
+  /sync/domains:
+    get:
+      summary: Retrieve symbol domains directly from the managed store
+      operationId: listSyncDomains
+      responses:
+        "200":
+          description: List of managed symbol domains
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+        "502":
+          description: Managed store could not fulfil the request.
+        "500":
+          description: Unexpected server error while retrieving domain list.
+
   /domains:
     get:
       summary: List all available symbol domains

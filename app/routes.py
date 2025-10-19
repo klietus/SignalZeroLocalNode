@@ -19,6 +19,22 @@ log = structlog.get_logger(__name__)
 router = APIRouter()
 
 
+async def _fetch_external_domains(event_prefix: str) -> List[str]:
+    """Load symbol domains from the managed store with consistent error handling."""
+
+    try:
+        domains = await asyncio.to_thread(symbol_sync.fetch_domains_from_external_store)
+    except symbol_sync.ExternalSymbolStoreError as exc:
+        log.error(f"{event_prefix}.external_error", error=str(exc))
+        raise HTTPException(status_code=502, detail="Failed to retrieve domains") from exc
+    except Exception as exc:  # pragma: no cover - defensive catch for unexpected issues
+        log.error(f"{event_prefix}.error", error=str(exc))
+        raise HTTPException(status_code=500, detail="Could not retrieve domain list") from exc
+
+    log.info(f"{event_prefix}.completed", count=len(domains))
+    return domains
+
+
 class QueryRequest(BaseModel):
     query: str
     session_id: str
@@ -91,17 +107,12 @@ async def bulk_put_symbols(symbols: Annotated[List[Symbol], Body(..., embed=True
 
 @router.get("/domains")
 async def list_domains():
-    try:
-        domains = await asyncio.to_thread(symbol_sync.fetch_domains_from_external_store)
-    except symbol_sync.ExternalSymbolStoreError as exc:
-        log.error("routes.list_domains.external_error", error=str(exc))
-        raise HTTPException(status_code=502, detail="Failed to retrieve domains") from exc
-    except Exception as exc:  # pragma: no cover - defensive catch for unexpected issues
-        log.error("routes.list_domains.error", error=str(exc))
-        raise HTTPException(status_code=500, detail="Could not retrieve domain list") from exc
+    return await _fetch_external_domains("routes.list_domains")
 
-    log.info("routes.list_domains", count=len(domains))
-    return domains
+
+@router.get("/sync/domains")
+async def list_sync_domains():
+    return await _fetch_external_domains("routes.sync_domains")
 
 
 @router.post("/sync/symbols")
