@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import httpx
 import structlog
@@ -36,6 +36,14 @@ class SyncResult:
         """Return the synchronization summary as a JSON-serialisable dictionary."""
 
         return asdict(self)
+
+
+@dataclass
+class QueryPage:
+    """Container for a single page returned from the external store."""
+
+    symbols: List[Symbol]
+    next_cursor: Optional[str]
 
 
 class ExternalSymbolStoreClient:
@@ -80,7 +88,7 @@ class ExternalSymbolStoreClient:
         symbol_tag: Optional[str] = None,
         last_symbol_id: Optional[str] = None,
         limit: int = 20,
-    ) -> List[Symbol]:
+    ) -> QueryPage:
         params = {"limit": min(limit, 20)}
         if symbol_domain:
             params["symbol_domain"] = symbol_domain
@@ -93,7 +101,15 @@ class ExternalSymbolStoreClient:
         try:
             response = self._client.get("/symbol", params=params)
             response.raise_for_status()
-        except httpx.HTTPError as exc:  # pragma: no cover - http errors are unlikely in tests
+        except httpx.HTTPStatusError as exc:  # pragma: no cover - network errors are unlikely in tests
+            detail = exc.response.text if exc.response is not None else ""
+            message = detail or str(exc)
+            if exc.response is not None and exc.response.status_code == 400:
+                raise ValueError(
+                    f"External store rejected the request: {message.strip() or '400 Bad Request'}"
+                ) from exc
+            raise ExternalSymbolStoreError(message) from exc
+        except httpx.HTTPError as exc:  # pragma: no cover - other http errors are unlikely in tests
             raise ExternalSymbolStoreError(str(exc)) from exc
 
         try:
@@ -101,11 +117,28 @@ class ExternalSymbolStoreClient:
         except ValueError as exc:
             raise ExternalSymbolStoreError("Invalid JSON response from external store") from exc
 
-        if not isinstance(payload, list):
+        items: List[dict]
+        next_cursor: Optional[str] = None
+
+        if isinstance(payload, list):
+            items = payload
+        elif isinstance(payload, dict):
+            data_candidates: Tuple[Optional[List[dict]], ...] = (
+                payload.get("symbols"),
+                payload.get("items"),
+                payload.get("data"),
+            )
+            items = next((candidate for candidate in data_candidates if isinstance(candidate, list)), None)
+            if items is None:
+                raise ExternalSymbolStoreError("Unexpected response format from external store")
+            next_cursor_value = payload.get("last_symbol_id") or payload.get("next")
+            if isinstance(next_cursor_value, str) and next_cursor_value.strip():
+                next_cursor = next_cursor_value.strip()
+        else:
             raise ExternalSymbolStoreError("Unexpected response format from external store")
 
         symbols: List[Symbol] = []
-        for item in payload:
+        for item in items:
             try:
                 symbols.append(Symbol.model_validate(item))
             except ValidationError as exc:
@@ -120,7 +153,7 @@ class ExternalSymbolStoreClient:
             returned=len(symbols),
             params=params,
         )
-        return symbols
+        return QueryPage(symbols=symbols, next_cursor=next_cursor)
 
     def list_domains(self) -> List[str]:
         """Return all symbol domains provided by the managed store."""
@@ -170,12 +203,14 @@ def sync_symbols_from_external_store(
 
     try:
         while True:
-            batch = client.query_symbols(
+            page = client.query_symbols(
                 symbol_domain=symbol_domain,
                 symbol_tag=symbol_tag,
                 last_symbol_id=last_symbol_id,
                 limit=limit,
             )
+            batch = page.symbols
+
             if not batch:
                 break
 
@@ -193,7 +228,10 @@ def sync_symbols_from_external_store(
             symbol_store.put_symbols_bulk(batch)
             result.stored += len(batch)
 
-            last_symbol_id = batch[-1].id
+            if page.next_cursor:
+                last_symbol_id = page.next_cursor
+            else:
+                last_symbol_id = batch[-1].id
             if len(batch) < limit:
                 break
     finally:

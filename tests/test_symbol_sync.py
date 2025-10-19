@@ -38,8 +38,10 @@ def test_sync_symbols_success(mock_store):
         index = calls["index"]
         calls["index"] += 1
         if index < len(pages):
-            return httpx.Response(200, json=pages[index])
-        return httpx.Response(200, json=[])
+            payload = pages[index]
+            # Return object payload with cursor to exercise parsing flexibility
+            return httpx.Response(200, json={"symbols": payload, "last_symbol_id": payload[-1]["id"]})
+        return httpx.Response(200, json={"symbols": [], "last_symbol_id": None})
 
     transport = httpx.MockTransport(handler)
 
@@ -96,6 +98,20 @@ def test_list_domains_invalid_payload():
     ) as client:
         with pytest.raises(symbol_sync.ExternalSymbolStoreError):
             client.list_domains()
+
+
+def test_query_symbols_handles_bad_request(monkeypatch):
+    transport = httpx.MockTransport(
+        lambda request: httpx.Response(400, text="missing filter")
+    )
+
+    with symbol_sync.ExternalSymbolStoreClient(
+        "https://example.com", transport=transport
+    ) as client:
+        with pytest.raises(ValueError) as exc_info:
+            client.query_symbols()
+
+    assert "missing filter" in str(exc_info.value)
 
 
 def test_fetch_domains_from_external_store(monkeypatch):
