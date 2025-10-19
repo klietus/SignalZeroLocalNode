@@ -117,9 +117,16 @@ async def list_domains():
     return domains
 
 
-@router.get("/external/domains")
+@router.get("/domains/external")
 async def list_external_domains():
     return await _fetch_external_domains("routes.external_domains")
+
+
+@router.get("/external/domains", include_in_schema=False)
+async def list_external_domains_legacy():
+    """Deprecated alias for /domains/external maintained for compatibility."""
+
+    return await _fetch_external_domains("routes.external_domains_legacy")
 
 
 @router.post("/sync/symbols")

@@ -28,6 +28,10 @@ export default defineConfig(({ mode }) => {
           target: proxyTarget,
           changeOrigin: true
         },
+        '/domains/external': {
+          target: proxyTarget,
+          changeOrigin: true
+        },
         '/external/domains': {
           target: proxyTarget,
           changeOrigin: true
