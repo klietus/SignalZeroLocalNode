@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from typing import List, Optional, Tuple
+from urllib.parse import parse_qs, urlparse
 
 import httpx
 import structlog
@@ -44,6 +45,59 @@ class QueryPage:
 
     symbols: List[Symbol]
     next_cursor: Optional[str]
+
+
+def _decode_cursor(cursor: Optional[str]) -> Tuple[Optional[str], Optional[int]]:
+    """Normalise cursor strings into explicit pagination inputs.
+
+    The external store may return the cursor as a bare symbol ID, a query-string fragment,
+    or a fully-qualified URL. This helper extracts the ``last_symbol_id`` (or other cursor
+    identifiers) alongside an optional ``limit`` override so follow-up requests match the
+    provided pagination contract.
+    """
+
+    if cursor is None:
+        return None, None
+
+    value = cursor.strip()
+    if not value:
+        return None, None
+
+    query_string = ""
+
+    if value.startswith(("http://", "https://")):
+        parsed = urlparse(value)
+        query_string = parsed.query
+    elif "?" in value:
+        query_string = value.split("?", 1)[1]
+    elif "=" in value:
+        query_string = value
+    else:
+        return value, None
+
+    if not query_string:
+        return None, None
+
+    params = parse_qs(query_string, keep_blank_values=False)
+
+    cursor_keys = ("last_symbol_id", "lastSymbolId", "cursor", "next")
+    last_symbol_id = None
+    for key in cursor_keys:
+        values = params.get(key)
+        if values:
+            last_symbol_id = values[0].strip() or None
+            if last_symbol_id:
+                break
+
+    limit_values = params.get("limit")
+    limit_override: Optional[int] = None
+    if limit_values:
+        try:
+            limit_override = int(limit_values[0])
+        except (TypeError, ValueError):
+            limit_override = None
+
+    return last_symbol_id, limit_override
 
 
 class ExternalSymbolStoreClient:
@@ -201,13 +255,15 @@ def sync_symbols_from_external_store(
     result = SyncResult()
     last_symbol_id: Optional[str] = None
 
+    current_limit = limit
+
     try:
         while True:
             page = client.query_symbols(
                 symbol_domain=symbol_domain,
                 symbol_tag=symbol_tag,
                 last_symbol_id=last_symbol_id,
-                limit=limit,
+                limit=current_limit,
             )
             batch = page.symbols
 
@@ -228,11 +284,19 @@ def sync_symbols_from_external_store(
             symbol_store.put_symbols_bulk(batch)
             result.stored += len(batch)
 
-            if page.next_cursor:
+            next_cursor_value, next_limit_override = _decode_cursor(page.next_cursor)
+
+            if next_limit_override is not None:
+                current_limit = max(1, min(next_limit_override, 20))
+
+            if next_cursor_value:
+                last_symbol_id = next_cursor_value
+            elif page.next_cursor:
                 last_symbol_id = page.next_cursor
             else:
                 last_symbol_id = batch[-1].id
-            if len(batch) < limit:
+
+            if len(batch) < current_limit and not page.next_cursor:
                 break
     finally:
         if owns_client:

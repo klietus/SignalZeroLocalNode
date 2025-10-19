@@ -58,6 +58,45 @@ def test_sync_symbols_success(mock_store):
     assert mock_store == [["remote-existing", "remote-new"], ["remote-second"]]
 
 
+def test_sync_symbols_cursor_url(mock_store):
+    responses = [
+        {"symbols": [{"id": "remote-a"}], "next": "/symbol?last_symbol_id=remote-a&limit=7"},
+        {"symbols": [{"id": "remote-b"}]},
+        {"symbols": []},
+    ]
+
+    calls = {"index": 0}
+
+    def handler(request):
+        call_index = calls["index"]
+        calls["index"] += 1
+        query_text = request.url.query.decode()
+        if call_index == 0:
+            assert "limit=7" in query_text
+            assert "last_symbol_id" not in query_text
+        elif call_index == 1:
+            assert "limit=7" in query_text
+            assert "last_symbol_id=remote-a" in query_text
+        elif call_index == 2:
+            assert "last_symbol_id=remote-b" in query_text
+
+        payload = responses[min(call_index, len(responses) - 1)]
+        return httpx.Response(200, json=payload)
+
+    transport = httpx.MockTransport(handler)
+
+    with symbol_sync.ExternalSymbolStoreClient(
+        "https://example.com", transport=transport
+    ) as client:
+        result = symbol_sync.sync_symbols_from_external_store(limit=7, client=client)
+
+    assert result.fetched == 2
+    assert result.stored == 2
+    assert result.new == 2
+    assert result.updated == 0
+    assert result.pages == 2
+
+
 def test_sync_symbols_http_error(monkeypatch):
     transport = httpx.MockTransport(lambda request: httpx.Response(500))
 
@@ -167,3 +206,20 @@ def test_fetch_domains_from_external_store_error(monkeypatch):
         symbol_sync.fetch_domains_from_external_store()
 
     assert instances[0].closed is True
+
+
+@pytest.mark.parametrize(
+    "cursor,expected_id,expected_limit",
+    [
+        (None, None, None),
+        ("", None, None),
+        ("remote-id", "remote-id", None),
+        ("last_symbol_id=remote-id", "remote-id", None),
+        ("/symbol?last_symbol_id=remote-id&limit=5", "remote-id", 5),
+        ("https://example.com/symbol?cursor=remote-id", "remote-id", None),
+        ("cursor=remote-id&limit=12", "remote-id", 12),
+    ],
+)
+def test_decode_cursor_variants(cursor, expected_id, expected_limit):
+    result = symbol_sync._decode_cursor(cursor)
+    assert result == (expected_id, expected_limit)
