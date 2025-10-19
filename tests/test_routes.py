@@ -80,11 +80,35 @@ def test_bulk_put_symbols(monkeypatch):
 
 
 def test_list_domains(client, monkeypatch):
-    monkeypatch.setattr(routes.symbol_store, "get_domains", lambda: ["a", "b"])
+    async def fake_to_thread(func, *args, **kwargs):
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(routes.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        routes.symbol_sync,
+        "fetch_domains_from_external_store",
+        lambda: ["a", "b"],
+    )
 
     response = client.get("/domains")
     assert response.status_code == 200
     assert response.json() == ["a", "b"]
+
+
+def test_list_domains_external_error(client, monkeypatch):
+    async def fake_to_thread(func, *args, **kwargs):
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(routes.asyncio, "to_thread", fake_to_thread)
+
+    def boom():
+        raise routes.symbol_sync.ExternalSymbolStoreError("nope")
+
+    monkeypatch.setattr(routes.symbol_sync, "fetch_domains_from_external_store", boom)
+
+    response = client.get("/domains")
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Failed to retrieve domains"
 
 
 def test_sync_symbols_route_success(client, monkeypatch):

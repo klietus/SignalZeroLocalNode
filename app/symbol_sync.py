@@ -122,6 +122,27 @@ class ExternalSymbolStoreClient:
         )
         return symbols
 
+    def list_domains(self) -> List[str]:
+        """Return all symbol domains provided by the managed store."""
+
+        log.debug("symbol_sync.list_domains.begin")
+        try:
+            response = self._client.get("/domains")
+            response.raise_for_status()
+        except httpx.HTTPError as exc:  # pragma: no cover - network failures are rare in tests
+            raise ExternalSymbolStoreError(str(exc)) from exc
+
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise ExternalSymbolStoreError("Invalid JSON response from external store") from exc
+
+        if not isinstance(payload, list) or any(not isinstance(item, str) for item in payload):
+            raise ExternalSymbolStoreError("Unexpected response format from external store")
+
+        log.debug("symbol_sync.list_domains.completed", count=len(payload))
+        return payload
+
 def sync_symbols_from_external_store(
     *,
     symbol_domain: Optional[str] = None,
@@ -191,3 +212,26 @@ def sync_symbols_from_external_store(
     )
 
     return result
+
+
+def fetch_domains_from_external_store(
+    *, client: Optional[ExternalSymbolStoreClient] = None
+) -> List[str]:
+    """Retrieve symbol domains directly from the managed store."""
+
+    settings = get_settings()
+    owns_client = False
+    if client is None:
+        client = ExternalSymbolStoreClient(
+            settings.symbol_store_base_url, timeout=settings.symbol_store_timeout
+        )
+        owns_client = True
+
+    try:
+        domains = client.list_domains()
+    finally:
+        if owns_client:
+            client.close()
+
+    log.info("symbol_sync.fetch_domains.completed", count=len(domains))
+    return domains
