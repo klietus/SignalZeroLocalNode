@@ -58,9 +58,15 @@ const SymbolSync = () => {
       setDomainsError(null);
 
       try {
-        const response = await fetch(buildApiUrl('/sync/domains'), {
+        let response = await fetch(buildApiUrl('/sync/domains'), {
           headers: { Accept: 'application/json' }
         });
+
+        if (response.status === 404) {
+          response = await fetch(buildApiUrl('/domains'), {
+            headers: { Accept: 'application/json' }
+          });
+        }
 
         if (!response.ok) {
           const errorText = await response.text();
