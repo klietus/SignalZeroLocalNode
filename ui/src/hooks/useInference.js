@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
-
-const buildUrl = (path) => `${API_BASE_URL}${path}`;
+import { buildUrl } from '../utils/api';
 
 const generateSessionId = () =>
   `session-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;

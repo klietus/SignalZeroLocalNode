@@ -45,6 +45,44 @@ SignalZero Local Node reads its runtime configuration from environment variables
 | `OPENAI_TEMPERATURE` | `0.0` | Sampling temperature for OpenAI responses. |
 | `OPENAI_MAX_OUTPUT_TOKENS` | `256` | Maximum tokens returned from OpenAI. |
 
+### External symbol store
+
+The runtime can hydrate its local Redis cache by synchronising against the managed SignalZero symbol store. The following
+environment variables tune that integration:
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `SYMBOL_STORE_BASE_URL` | `https://qnw96whs57.execute-api.us-west-2.amazonaws.com/prod` | Base URL for the external SignalZero store API. |
+| `SYMBOL_STORE_TIMEOUT` | `10.0` | Client timeout (in seconds) when fetching batches from the external store. |
+
+Set these variables when pointing the node at a different managed deployment or when running behind a proxy.
+
+### Synchronising managed symbols
+
+Use the `/sync/symbols` endpoint to pull records from the managed store into the local cache. The request accepts an optional
+domain or tag filter and a `limit` (maximum 20 per external page). Example request:
+
+```bash
+curl -X POST http://localhost:8000/sync/symbols \
+  -H "Content-Type: application/json" \
+  -d '{"symbol_domain": "root", "limit": 10}'
+```
+
+The response summarises the run:
+
+```json
+{
+  "fetched": 10,
+  "stored": 10,
+  "new": 7,
+  "updated": 3,
+  "pages": 1
+}
+```
+
+You can repeat the sync call to stay aligned with the managed store or build it into a scheduled job. If you prefer a visual
+workflow, open the web UI and navigate to **Symbol Sync** to launch runs and review metrics interactively.
+
 Set `MODEL_PROVIDER=openai` together with the relevant OpenAI environment variables to call OpenAI-hosted models. Leave the provider at its default `local` value to continue using a self-hosted model endpoint.
 
 ---

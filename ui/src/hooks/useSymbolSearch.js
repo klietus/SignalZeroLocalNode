@@ -1,14 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { buildUrl } from '../utils/api';
+
 export const SEARCH_MODES = ['id', 'domain', 'tag'];
 
 const DEFAULT_RESULT_LIMIT = 20;
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
-
-const buildUrl = (path, params) => {
-  const query = params && params.toString();
-  return `${API_BASE_URL}${path}${query ? `?${query}` : ''}`;
-};
 
 export const useSymbolSearch = () => {
   const [searchMode, rawSetSearchMode] = useState('id');
@@ -77,7 +73,10 @@ export const useSymbolSearch = () => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(errorText || `Failed to fetch domains: ${response.statusText}`);
+      throw new Error(
+        errorText ||
+          `Failed to fetch domains: ${response.statusText}. Ensure the local API exposes /domains.`
+      );
     }
 
     return response.json();

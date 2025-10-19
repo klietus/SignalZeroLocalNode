@@ -28,6 +28,14 @@ export default defineConfig(({ mode }) => {
           target: proxyTarget,
           changeOrigin: true
         },
+        '/domains/external': {
+          target: proxyTarget,
+          changeOrigin: true
+        },
+        '/sync/symbols': {
+          target: proxyTarget,
+          changeOrigin: true
+        },
         '/query': {
           target: proxyTarget,
           changeOrigin: true

@@ -26,6 +26,9 @@ const TopBar = () => {
           <Link className={linkClass('/')} to="/">
             Symbol Browser
           </Link>
+          <Link className={linkClass('/sync')} to="/sync">
+            Symbol Sync
+          </Link>
         </nav>
       </div>
     </header>

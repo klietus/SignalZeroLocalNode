@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router-dom';
 import TopBar from './components/TopBar';
 import SymbolBrowser from './pages/SymbolBrowser';
 import Inference from './pages/Inference';
+import SymbolSync from './pages/SymbolSync';
 
 const App = () => {
   return (
@@ -11,6 +12,7 @@ const App = () => {
         <Routes>
           <Route path="/" element={<SymbolBrowser />} />
           <Route path="/inference" element={<Inference />} />
+          <Route path="/sync" element={<SymbolSync />} />
         </Routes>
       </main>
     </div>

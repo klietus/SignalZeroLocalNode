@@ -26,6 +26,9 @@ class Settings:
     openai_temperature: float = 0.0
     openai_max_output_tokens: int = 1028
 
+    symbol_store_base_url: str = "https://qnw96whs57.execute-api.us-west-2.amazonaws.com/prod"
+    symbol_store_timeout: float = 10.0
+
     @classmethod
     def from_env(cls) -> "Settings":
         """Construct settings from environment variables."""
@@ -41,6 +44,9 @@ class Settings:
             "openai_api_key": _optional("OPENAI_API_KEY"),
             "openai_model": os.getenv("OPENAI_MODEL", cls.openai_model),
             "openai_base_url": _optional("OPENAI_BASE_URL"),
+            "symbol_store_base_url": os.getenv(
+                "SYMBOL_STORE_BASE_URL", cls.symbol_store_base_url
+            ),
         }
 
         if (value := os.getenv("MODEL_NUM_PREDICT")) is not None:
@@ -51,6 +57,9 @@ class Settings:
 
         if (value := os.getenv("OPENAI_MAX_OUTPUT_TOKENS")) is not None:
             data["openai_max_output_tokens"] = int(value)
+
+        if (value := os.getenv("SYMBOL_STORE_TIMEOUT")) is not None:
+            data["symbol_store_timeout"] = float(value)
 
         return cls(**data)
 
