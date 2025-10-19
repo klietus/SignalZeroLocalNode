@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { buildApiUrl } from '../utils/api';
+import { buildUrl } from '../utils/api';
 
 export const SEARCH_MODES = ['id', 'domain', 'tag'];
 
@@ -29,7 +29,7 @@ export const useSymbolSearch = () => {
       return null;
     }
 
-    const response = await fetch(buildApiUrl(`/symbol/${encodeURIComponent(trimmed)}`), {
+    const response = await fetch(buildUrl(`/symbol/${encodeURIComponent(trimmed)}`), {
       headers: {
         Accept: 'application/json'
       }
@@ -50,7 +50,7 @@ export const useSymbolSearch = () => {
   }, []);
 
   const fetchSymbolList = useCallback(async (params) => {
-    const response = await fetch(buildApiUrl('/symbols', params), {
+    const response = await fetch(buildUrl('/symbols', params), {
       headers: {
         Accept: 'application/json'
       }
@@ -65,7 +65,7 @@ export const useSymbolSearch = () => {
   }, []);
 
   const fetchDomains = useCallback(async () => {
-    const response = await fetch(buildApiUrl('/domains'), {
+    const response = await fetch(buildUrl('/domains'), {
       headers: {
         Accept: 'application/json'
       }

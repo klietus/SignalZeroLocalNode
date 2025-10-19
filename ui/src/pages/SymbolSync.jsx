@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { buildApiUrl } from '../utils/api';
+import { buildUrl } from '../utils/api';
 
 const DEFAULT_LIMIT = 20;
 const MIN_LIMIT = 1;
@@ -58,7 +58,7 @@ const SymbolSync = () => {
       setDomainsError(null);
 
       try {
-        const endpoint = buildApiUrl('/domains/external');
+        const endpoint = buildUrl('/domains/external');
         const response = await fetch(endpoint, {
           headers: { Accept: 'application/json' }
         });
@@ -133,7 +133,7 @@ const SymbolSync = () => {
       }
 
       try {
-        const response = await fetch(buildApiUrl('/sync/symbols'), {
+        const response = await fetch(buildUrl('/sync/symbols'), {
           method: 'POST',
           headers: {
             Accept: 'application/json',
