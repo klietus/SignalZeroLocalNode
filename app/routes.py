@@ -129,6 +129,13 @@ async def list_external_domains_legacy():
     return await _fetch_external_domains("routes.external_domains_legacy")
 
 
+@router.get("/sync/domains", include_in_schema=False)
+async def list_external_domains_sync_alias():
+    """Additional alias retained for historical clients targeting /sync/domains."""
+
+    return await _fetch_external_domains("routes.external_domains_sync_alias")
+
+
 @router.post("/sync/symbols")
 async def sync_symbols(request: SyncRequest):
     log.info(

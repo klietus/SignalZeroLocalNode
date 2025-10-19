@@ -58,20 +58,43 @@ const SymbolSync = () => {
       setDomainsError(null);
 
       try {
-        const endpoint = buildApiUrl('/domains/external');
-        const response = await fetch(endpoint, {
-          headers: { Accept: 'application/json' }
-        });
+        const candidates = ['/domains/external', '/external/domains', '/sync/domains'];
+        let payload = null;
+        let resolvedEndpoint = null;
+        let lastResponse = null;
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          const message =
-            errorText ||
-            `Failed to load domains (status ${response.status}) from ${endpoint}. Ensure the local API exposes /domains/external.`;
-          throw new Error(message);
+        for (const candidate of candidates) {
+          const endpoint = buildApiUrl(candidate);
+          const response = await fetch(endpoint, {
+            headers: { Accept: 'application/json' }
+          });
+
+          if (response.status === 404) {
+            lastResponse = response;
+            continue;
+          }
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            const message =
+              errorText ||
+              `Failed to load domains (status ${response.status}) from ${endpoint}. Ensure the local API exposes an external domain endpoint.`;
+            throw new Error(message);
+          }
+
+          payload = await response.json();
+          resolvedEndpoint = endpoint;
+          lastResponse = response;
+          break;
         }
 
-        const payload = await response.json();
+        if (!resolvedEndpoint) {
+          const status = lastResponse?.status ?? 'unknown';
+          throw new Error(
+            `Failed to load domains: external domain endpoint not found (last status ${status}). Ensure the API exposes /domains/external or a legacy alias.`
+          );
+        }
+
         if (!cancelled) {
           setDomains(Array.isArray(payload) ? payload : []);
         }
