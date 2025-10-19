@@ -85,3 +85,60 @@ def test_list_domains(client, monkeypatch):
     response = client.get("/domains")
     assert response.status_code == 200
     assert response.json() == ["a", "b"]
+
+
+def test_sync_symbols_route_success(client, monkeypatch):
+    recorded = {}
+
+    def fake_sync(**kwargs):
+        recorded["kwargs"] = kwargs
+        return routes.symbol_sync.SyncResult(fetched=2, stored=2, new=1, updated=1, pages=1)
+
+    async def fake_to_thread(func, *args, **kwargs):
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(routes.symbol_sync, "sync_symbols_from_external_store", fake_sync)
+    monkeypatch.setattr(routes.asyncio, "to_thread", fake_to_thread)
+
+    payload = {"symbol_domain": "root", "symbol_tag": "system", "limit": 10}
+    response = client.post("/sync/symbols", json=payload)
+
+    assert response.status_code == 200
+    assert response.json() == {"fetched": 2, "stored": 2, "new": 1, "updated": 1, "pages": 1}
+    assert recorded["kwargs"] == {
+        "symbol_domain": "root",
+        "symbol_tag": "system",
+        "limit": 10,
+    }
+
+
+def test_sync_symbols_route_external_error(client, monkeypatch):
+    def fake_sync(**kwargs):
+        raise routes.symbol_sync.ExternalSymbolStoreError("boom")
+
+    async def fake_to_thread(func, *args, **kwargs):
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(routes.symbol_sync, "sync_symbols_from_external_store", fake_sync)
+    monkeypatch.setattr(routes.asyncio, "to_thread", fake_to_thread)
+
+    response = client.post("/sync/symbols", json={})
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Failed to sync symbols from external store"
+
+
+def test_sync_symbols_route_bad_limit(client, monkeypatch):
+    def fake_sync(**kwargs):
+        raise ValueError("limit must be greater than zero")
+
+    async def fake_to_thread(func, *args, **kwargs):
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(routes.symbol_sync, "sync_symbols_from_external_store", fake_sync)
+    monkeypatch.setattr(routes.asyncio, "to_thread", fake_to_thread)
+
+    response = client.post("/sync/symbols", json={"limit": 5})
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "limit must be greater than zero"

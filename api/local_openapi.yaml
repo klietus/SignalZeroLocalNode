@@ -121,43 +121,93 @@ paths:
                 properties:
                   status:
                     type: string
-    /inject/symbols:
-      put:
-        requestBody:
-          required: true
+  /inject/symbols:
+    put:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "#/components/schemas/Symbol"
+      responses:
+        "200":
+          description: Symbol stored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+
+  /sync/symbols:
+    post:
+      summary: Synchronise symbols from the managed SignalZero store into the local cache
+      operationId: syncSymbols
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                symbol_domain:
+                  type: string
+                  description: Optional domain to filter by when fetching remote symbols.
+                symbol_tag:
+                  type: string
+                  description: Optional tag to filter by when fetching remote symbols.
+                limit:
+                  type: integer
+                  description: Maximum number of symbols to request per external page (capped at 20).
+                  default: 20
+                  minimum: 1
+                  maximum: 20
+      responses:
+        "200":
+          description: Synchronisation summary describing what changed in the local cache
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fetched:
+                    type: integer
+                    description: Total number of records fetched from the managed store.
+                  stored:
+                    type: integer
+                    description: Total number of records written to the local cache.
+                  new:
+                    type: integer
+                    description: Newly inserted symbol count.
+                  updated:
+                    type: integer
+                    description: Symbols that already existed and were updated.
+                  pages:
+                    type: integer
+                    description: How many external pages were processed.
+        "400":
+          description: Invalid request payload.
+        "502":
+          description: Managed store returned an error during synchronisation.
+
+  /domains:
+    get:
+      summary: List all available symbol domains
+      operationId: listDomains
+      responses:
+        "200":
+          description: List of symbol domains
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/Symbol"
-        responses:
-          "200":
-            description: Symbol stored
-            content:
-              application/json:
-                schema:
-                  type: object
-                  properties:
-                    status:
-                      type: string
-
-      
-    /domains:
-      get:
-        summary: List all available symbol domains
-        operationId: listDomains
-        responses:
-          "200":
-            description: List of symbol domains
-            content:
-              application/json:
-                schema:
-                  type: array
-                  items:
-                    type: string
-          "500":
-            description: Error retrieving domain list
+                  type: string
+        "500":
+          description: Error retrieving domain list
           
 components:
   schemas:

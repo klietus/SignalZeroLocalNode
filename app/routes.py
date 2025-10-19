@@ -2,11 +2,12 @@
 
 from typing import Annotated, List, Optional
 
+import asyncio
 import structlog
 from fastapi import APIRouter, Body, HTTPException, Path, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from app import symbol_store
+from app import symbol_store, symbol_sync
 from app.inference import run_query
 from app.logging_config import configure_logging
 from app.symbol_store import Symbol
@@ -21,6 +22,12 @@ router = APIRouter()
 class QueryRequest(BaseModel):
     query: str
     session_id: str
+
+
+class SyncRequest(BaseModel):
+    symbol_domain: Optional[str] = None
+    symbol_tag: Optional[str] = None
+    limit: int = Field(20, ge=1, le=20)
 
 
 @router.post("/query")
@@ -91,3 +98,39 @@ async def list_domains():
     except Exception as exc:
         log.error("routes.list_domains.error", error=str(exc))
         raise HTTPException(status_code=500, detail="Could not retrieve domain list")
+
+
+@router.post("/sync/symbols")
+async def sync_symbols(request: SyncRequest):
+    log.info(
+        "routes.sync_symbols.begin",
+        domain=request.symbol_domain,
+        tag=request.symbol_tag,
+        limit=request.limit,
+    )
+
+    try:
+        result = await asyncio.to_thread(
+            symbol_sync.sync_symbols_from_external_store,
+            symbol_domain=request.symbol_domain,
+            symbol_tag=request.symbol_tag,
+            limit=request.limit,
+        )
+    except ValueError as exc:
+        log.warning("routes.sync_symbols.invalid", error=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except symbol_sync.ExternalSymbolStoreError as exc:
+        log.error("routes.sync_symbols.external_error", error=str(exc))
+        raise HTTPException(
+            status_code=502, detail="Failed to sync symbols from external store"
+        ) from exc
+
+    log.info(
+        "routes.sync_symbols.completed",
+        fetched=result.fetched,
+        stored=result.stored,
+        new=result.new,
+        updated=result.updated,
+        pages=result.pages,
+    )
+    return result.to_dict()
