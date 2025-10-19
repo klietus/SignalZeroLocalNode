@@ -10,7 +10,6 @@ import tiktoken
 configure_logging()
 log = structlog.get_logger(__name__)
 
-
 def _get_encoder():
     return tiktoken.get_encoding("cl100k_base")
 
