@@ -37,3 +37,7 @@ data/chat_encryption.key
 *.sqlite
 *.sqlite3
 *.db
+
+# Frontend dependencies
+ui/node_modules/
+ui/package-lock.json
