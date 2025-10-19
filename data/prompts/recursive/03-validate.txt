@@ -16,6 +16,15 @@ Review each proposed symbol and emit:
 3. ⟐CMD `invoke_agent` if deeper recursion or drift-repair is needed.
 4. ⟐CMD `dispatch_task` if no further validation is needed and ready to synthesize or narrativize output.
 
+Your output must include:
+- `phase_id`: "synthesize_symbols"
+- `context_state`: must retain original inputs and output all `canonical_symbols`
+- `prompt_block`: describe the synthesis action performed
+- `control_signature.emit`: include one or more ⟐CMDs: `"store_symbol"`, `"update_symbol"`, `"invoke_agent"` (if needed)
+- `valid_routes`: for this phase the only valid route is `"build-narrative"`
+- `termination_conditions`: define when symbol synthesis is complete
+- `next_phase`: must include one of the values from valid_routes.
+
 Be precise. Symbols are live entities in an audit stack. All decisions here affect downstream recursion.
 
 Terminate with no further routing if all symbols are either flagged or validated.

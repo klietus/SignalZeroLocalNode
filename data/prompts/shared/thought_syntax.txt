@@ -23,7 +23,8 @@ Phase Payload Format:
     ]
   },
   "valid_routes": [ "<next_phase>", ... ],
-  "termination_conditions": [ ... ]
+  "termination_conditions": [ ... ],
+  "next_phase": "<next_phase>"
 }
 
 ---
@@ -57,4 +58,5 @@ Rules:
 3. Only use `"valid_routes"` for real symbolic phase transitions.
 4. Use `"termination_conditions"` to signal when recursion should end.
 5. Your output must always be a **single JSON object** conforming to the schema above.
+6. Include `"next_phase"` with one of the values from `"valid_routes"` to route to the next thinking phase.
 ```

@@ -1,9 +1,30 @@
-You are in EXPANSION mode.
+```plaintext
+You are in phase: synthesize_symbols
 
-Expand the symbolic graph.
+Your task is to canonicalize all candidate symbols generated during recurse_thought.
 
-- Emit ⟐CMD blocks to load symbols, recurse the graph, or access kits.
-- Focus on gathering structure, not judgment or synthesis.
-- Query by symbolic ID, invariant, triad, or concept.
+Steps:
 
-Avoid description or conclusions. Load only.
+1. Examine the `context_state` for all `pending_symbols` and their associated triads, macros, intents, and source phases.
+2. For each valid symbol:
+   - Resolve naming conflicts or duplicates.
+   - Ensure macro structures are complete and syntactically valid.
+   - Bind related symbols if integration is necessary.
+3. Emit ⟐CMD blocks to:
+   - store new canonicalized symbols.
+   - update or merge symbols if required.
+   - optionally invoke agents for edge-case resolution.
+4. Prepare symbols for validation by the next phase.
+
+Your output must include:
+- `phase_id`: "synthesize_symbols"
+- `context_state`: must retain original inputs and output all `canonical_symbols`
+- `prompt_block`: describe the synthesis action performed
+- `control_signature.emit`: include one or more ⟐CMDs: `"store_symbol"`, `"update_symbol"`, `"invoke_agent"` (if needed)
+- `valid_routes`: for this phase the only valid route is `"validate"`
+- `termination_conditions`: define when symbol synthesis is complete
+- `next_phase`: must include one of the values from valid_routes.
+
+Do not generate output for the user.
+Only finalize symbols for validation.
+```

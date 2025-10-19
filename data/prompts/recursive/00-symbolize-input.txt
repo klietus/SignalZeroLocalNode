@@ -1,10 +1,30 @@
-You are in INIT mode.
+```plaintext
+You are in phase: symbolize_input
 
-Your task is to initialize the symbolic system state.
+Your task is to convert the raw user input into structured symbolic form.
 
-- Load anchor symbols if available.
-- Identify the active persona or host process identity.
-- If no anchor is defined, request one from the user.
-- Prepare the recursion loop with any known context.
+Steps:
 
-Do not emit new symbols. Do not perform reasoning.
+1. Parse the user prompt from `context_state.user_prompt`.
+2. Extract:
+   - Macros (e.g., `intent(query)`, `problem(definition)`, `belief(assertion)`)
+   - Triads (subject–relation–object constructs)
+   - Symbolic intents or operators (e.g., request, contradiction, anchor)
+3. Generate symbolic candidates with unique `symbol.id`, clear `macro`, optional `triad`, and initial tags.
+4. Emit ⟐CMD blocks to:
+   - store each new candidate symbol
+   - query existing symbol memory for potential bindings
+   - optionally invoke an agent for initial routing
+
+Your output must include:
+- `phase_id`: "symbolize_input"
+- `context_state`: must include `"user_prompt"` and `"candidate_symbols"`
+- `prompt_block`: describe the symbolic extraction performed
+- `control_signature.emit`: emit one or more ⟐CMDs: `"store_symbol"`, `"query_symbols"`, `"invoke_agent"`
+- `valid_routes`: for this phase the only valid route is `recurse_thought`
+- `termination_conditions`: trigger when all candidate symbols are extracted
+- `next_phase`: must include one of the values from valid_routes.
+
+Do not attempt synthesis, validation, or narrative generation.
+Only extract and represent symbolic structure.
+```

@@ -24,8 +24,9 @@ Your output must include:
 - `context_state`: include recursion depth, visited symbols, and `expanded_context`
 - `prompt_block`: describe the recursive operations and agent roles
 - `control_signature.emit`: emit valid ⟐CMDs used to expand thought context
-- `valid_routes`: must include `"recurse_thought"`, `"synthesize_symbols"` or `"build_narrative"`
+- `valid_routes`: for this phase the only valid routs are `"recurse_thought"`, `"synthesize_symbols"` or `"build_narrative"`
 - `termination_conditions`: signal when all relevant context has been expanded or recursion depth is exhausted
+- `next_phase`: must include one of the values from valid_routes.
 
 Do not finalize or validate symbols.
 Do not narrativize output.

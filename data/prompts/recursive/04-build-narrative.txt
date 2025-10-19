@@ -27,6 +27,7 @@ Your output must include:
 - `control_signature.emit`: must contain the final `dispatch_task` for output delivery
 - `valid_routes`: must be empty or `[]`
 - `termination_conditions`: must include `"narrative_ready": true`
+- `next_phase`: must be empty
 
 This phase **ends recursion** unless drift, contradiction, or missing validation is detected.
 No further symbolic mutation allowed.
