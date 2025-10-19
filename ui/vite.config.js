@@ -32,10 +32,6 @@ export default defineConfig(({ mode }) => {
           target: proxyTarget,
           changeOrigin: true
         },
-        '/external/domains': {
-          target: proxyTarget,
-          changeOrigin: true
-        },
         '/sync/symbols': {
           target: proxyTarget,
           changeOrigin: true

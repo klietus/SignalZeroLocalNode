@@ -211,44 +211,6 @@ paths:
         "500":
           description: Unexpected server error while retrieving domain list.
 
-  /external/domains:
-    get:
-      summary: Deprecated alias for /domains/external
-      operationId: listExternalDomainsLegacy
-      deprecated: true
-      responses:
-        "200":
-          description: List of managed symbol domains
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  type: string
-        "502":
-          description: Managed store could not fulfil the request.
-        "500":
-          description: Unexpected server error while retrieving domain list.
-
-  /sync/domains:
-    get:
-      summary: Deprecated alias for /domains/external retained for legacy clients
-      operationId: listExternalDomainsSyncAlias
-      deprecated: true
-      responses:
-        "200":
-          description: List of managed symbol domains
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  type: string
-        "502":
-          description: Managed store could not fulfil the request.
-        "500":
-          description: Unexpected server error while retrieving domain list.
-
   /domains:
     get:
       summary: List locally cached symbol domains

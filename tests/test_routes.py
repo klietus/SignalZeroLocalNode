@@ -130,38 +130,6 @@ def test_list_external_domains_error(client, monkeypatch):
     assert response.json()["detail"] == "Failed to retrieve external domains"
 
 
-def test_list_external_domains_legacy_alias(client, monkeypatch):
-    async def fake_to_thread(func, *args, **kwargs):
-        return func(*args, **kwargs)
-
-    monkeypatch.setattr(routes.asyncio, "to_thread", fake_to_thread)
-    monkeypatch.setattr(
-        routes.symbol_sync,
-        "fetch_domains_from_external_store",
-        lambda: ["legacy"],
-    )
-
-    response = client.get("/external/domains")
-    assert response.status_code == 200
-    assert response.json() == ["legacy"]
-
-
-def test_list_external_domains_sync_alias(client, monkeypatch):
-    async def fake_to_thread(func, *args, **kwargs):
-        return func(*args, **kwargs)
-
-    monkeypatch.setattr(routes.asyncio, "to_thread", fake_to_thread)
-    monkeypatch.setattr(
-        routes.symbol_sync,
-        "fetch_domains_from_external_store",
-        lambda: ["sync"],
-    )
-
-    response = client.get("/sync/domains")
-    assert response.status_code == 200
-    assert response.json() == ["sync"]
-
-
 def test_sync_symbols_route_success(client, monkeypatch):
     recorded = {}
 
